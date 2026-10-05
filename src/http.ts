@@ -6,6 +6,7 @@ import type { Ctx } from './db.js';
 import { AppError } from './errors.js';
 import * as holds from './holds.js';
 import { safeEqual } from './ids.js';
+import * as tickets from './tickets.js';
 
 /** onRequest hook: the named header must equal the expected key (compared in constant time). */
 const requireKey = (header: string, expected: string) => async (req: FastifyRequest) => {
@@ -26,6 +27,16 @@ type HoldParams = { holdId: string };
 const holdToken = (req: FastifyRequest) => {
   const v = req.headers['x-hold-token'];
   return typeof v === 'string' ? v : undefined;
+};
+
+const checkinBody = {
+  type: 'object',
+  required: ['qr'],
+  additionalProperties: false,
+  properties: {
+    qr: { type: 'string', minLength: 1, maxLength: 200 },
+    gate: { type: 'string', minLength: 1, maxLength: 64 },
+  },
 };
 
 const payBody = {
@@ -149,6 +160,16 @@ export function buildApp(ctx: Ctx): FastifyInstance {
     const { replay, order, tickets } = holds.payHold(ctx, (req.params as HoldParams).holdId, holdToken(req), req.body as holds.PayInput);
     return reply.code(replay ? 200 : 201).send({ order, tickets });
   });
+
+  app.get('/api/orders/:orderId', { schema: { params: idParam('orderId') } }, async (req) =>
+    holds.getOrder(ctx, (req.params as { orderId: string }).orderId, holdToken(req)),
+  );
+
+  app.post(
+    '/api/checkin',
+    { onRequest: requireKey('x-gate-key', config.gateApiKey), schema: { body: checkinBody } },
+    async (req) => tickets.checkIn(ctx, req.body as tickets.CheckInInput),
+  );
 
   app.register(
     async (adminApp) => {

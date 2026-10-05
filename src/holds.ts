@@ -194,6 +194,17 @@ function orderView(db: Db, holdId: string) {
   };
 }
 
+/** GET /api/orders/:id: needs the token of the hold the order came from. */
+export function getOrder(ctx: Ctx, orderId: string, token: string | undefined) {
+  const { db } = ctx;
+  return db.transaction(() => {
+    const o = db.prepare('SELECT hold_id FROM orders WHERE id = ?').get(orderId) as { hold_id: string } | undefined;
+    if (!o) throw notFound('Order');
+    authorise(loadHold(db, o.hold_id), token);
+    return orderView(db, o.hold_id);
+  })();
+}
+
 /**
  * POST /api/holds/:id/pay (ARCHITECTURE 4.3): charge, convert held to sold, create the order and one
  * ticket per seat, all in one transaction. A second call returns the same order (`replay`).

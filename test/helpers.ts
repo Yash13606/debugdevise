@@ -144,6 +144,24 @@ export const payHold = (t: TestApp, holdId: string, token: string, payload: Reco
 export const releaseHold = (t: TestApp, holdId: string, token: string) =>
   t.app.inject({ method: 'DELETE', url: `/api/holds/${holdId}`, headers: holdToken(token) });
 
+/** POST /api/checkin. Pass `null` as the gate to leave the field out. */
+export const scan = (t: TestApp, qr: string, gate: string | null = 'north-1', headers: Record<string, string> = GATE) =>
+  t.app.inject({ method: 'POST', url: '/api/checkin', headers, payload: gate === null ? { qr } : { qr, gate } });
+
+export const getOrder = (t: TestApp, orderId: string, token: string) =>
+  t.app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: holdToken(token) });
+
+/** Hold and pay `quantity` seats of `tier`; returns the hold token, the order and the tickets. */
+export async function buyTickets(t: TestApp, eventId: string, tier: { id: string }, quantity = 1, email = 'buyer@x.com') {
+  const held = await placeHold(t, eventId, email, [line(tier, quantity)]);
+  expect(held.statusCode, held.body).toBe(201);
+  const { hold, hold_token } = held.json();
+  const paid = await payHold(t, hold.id, hold_token);
+  expect(paid.statusCode, paid.body).toBe(201);
+  const { order, tickets } = paid.json();
+  return { holdId: hold.id as string, token: hold_token as string, order, tickets: tickets as { id: string; qr_payload: string }[] };
+}
+
 /** GET /api/events/:id: the public availability view. */
 export async function getEvent(t: TestApp, eventId: string): Promise<Json> {
   const res = await t.app.inject({ method: 'GET', url: `/api/events/${eventId}` });

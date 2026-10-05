@@ -126,6 +126,7 @@ Errors: `402 PAYMENT_FAILED` (hold remains active), `403`, `404`, `409 HOLD_NOT_
 ```json
 { "qr": "AP1:Vf0l…", "gate": "north-1" }
 ```
+`gate` is optional (a name of up to 64 characters, stored with the scan); whitespace around `qr` is ignored.
 `200`:
 ```json
 { "result": "ADMITTED", "ticket": { "id": "tkt_1", "tier_id": "tier_a", "tier_name": "Early", "event_id": "evt_x" },
