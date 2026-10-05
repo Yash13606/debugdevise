@@ -1,7 +1,7 @@
 # GAPS — weaknesses found in Hi.Events and what this rebuild does about them
 
 Evidence references (CAP-, HOLD-, PAY-, CHK-, PROMO-, REF-, LIM-) point to `OBSERVATIONS.md`.
-Severity is judged for the target scenario: **5,000 passes released at one instant (6 PM), Tatkal-style.**
+Severity is assessed for the target scenario: **5,000 passes released at one instant (6 PM), Tatkal-style.**
 **Confidence:** *code-read* = established from cited lines; *analysis* = reasoned from cited lines, not reproduced.
 
 ## Decisions

@@ -12,7 +12,10 @@ An honest record of how an AI coding agent was used to produce the observations 
 - The event's process rules: docs are pushed before any code; the first commit and the submission follow the stated times.
 - The target repository (created and owned by the human).
 - That the agent must not appear as a collaborator or co-author on pushed commits.
-- Adoption of the agent's proposed improvements (fix = GAP-1, differentiator = waiting room + per-buyer cap) — proposed by the agent in its Phase 1 report; used as written in these docs.
+## Decisions made by the agent, not yet confirmed by the human
+- The improvements: fix = GAP-1, differentiator = waiting room + per-buyer cap.
+- The stack (Node.js, TypeScript, Fastify, SQLite) and the project name (RushPass).
+- These were proposed in the agent's Phase 1 report and are used as written in these docs. The human has not explicitly confirmed them at the time of writing and may change them.
 
 ## Prompts (paraphrased, in order)
 1. Save the problem statement to a markdown file; clone the original repository.
@@ -20,6 +23,7 @@ An honest record of how an AI coding agent was used to produce the observations 
 3. Build phase-wise plan documents, using the listed external skills/repositories as reference.
 4. "Phase 0 done, do Phase 1": trace capacity, holds/expiry and QR check-in in the original, with `file:line` evidence.
 5. Do phases 1–3 only, following the timing rules; push the docs to the given repository without adding the agent as a collaborator.
+6. Confirm that everything so far was done correctly. The agent then re-checked the remote repository and ran a mechanical check of every `file:line` citation (see below).
 
 ## What the agent did
 1. **Orientation:** listed the backend layout; located the order, product-quantity and check-in code with text search.
@@ -41,6 +45,11 @@ An honest record of how an AI coding agent was used to produce the observations 
 | 5 | While drafting this documentation the agent wrote a **wrong class-file name** in a citation (HOLD-8). | Caught on re-reading its own output against the earlier search result; fixed in the same session. |
 | 6 | Assumed the scanner endpoints were public without having seen the end of the route group. | Read the group's closing lines and added the exact line range (`routes/api.php:714-833`). |
 | 7 | Cited a domain-object helper as the check-in list window gate without having read the validator the service actually calls. | Read `CheckInListActivityValidator`, corrected the citation in CHK-2. |
+| 8 | Three paragraphs (CAP-3, PAY-4, CHK-2) used bare `:NN` line references after naming a different file, so a reader could attach them to the wrong file. | Found by the citation check below; each reference now names its file. |
+| 9 | An earlier version of this log listed the agent's own proposals (improvements, stack) under "What the human decided". | Noticed on review; moved to a separate section stating they are unconfirmed. |
+
+## Citation check (run after the first push)
+A script parsed every `path:line` citation in these documents and compared it with the local clone of the original at the studied commit. First run: 218 line-numbered citations, **0 missing files, 0 out-of-range line numbers**, plus the ambiguous bare references in mistake 8. After fixing those, the re-run covered 221 citations with **0 problems**. The first line of each cited range was also printed and compared with the claim it supports; no mismatch was found (end lines were checked only to exist). The script is a local helper and is not part of this repository.
 
 ## Claims deliberately marked as analysis, not fact
 GAP-1, GAP-2 (impact), GAP-3, GAP-4 (impact), GAP-8, GAP-10, and the "two paths" outcome in CHK-3 are reasoned from the code but were **not executed or reproduced**. The documents say so wherever they appear.
