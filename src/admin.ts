@@ -1,4 +1,4 @@
-import { now as clockNow } from './clock.js';
+import { iso, now as clockNow } from './clock.js';
 import type { Ctx } from './db.js';
 import { AppError } from './errors.js';
 import { randomId } from './ids.js';
@@ -50,4 +50,54 @@ export function createTier(ctx: Ctx, eventId: string, input: TierInput) {
   ).run(id, eventId, input.name.trim(), input.price_cents, input.capacity, input.max_per_order ?? config.defaultMaxPerOrder, starts, ends, eventId, clockNow());
   const view = inventory.readEvent(db, eventId, config.currency)!;
   return { tier: view.tiers.find((t) => t.id === id)! };
+}
+
+export interface PromoInput {
+  code: string;
+  kind: 'PERCENT' | 'FIXED';
+  value: number;
+  max_uses?: number | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  tier_id?: string | null;
+}
+
+export function createPromo(ctx: Ctx, eventId: string, input: PromoInput) {
+  const { db } = ctx;
+  if (!db.prepare('SELECT 1 FROM events WHERE id = ?').get(eventId)) throw new AppError('NOT_FOUND', 404, 'Event not found');
+  if (input.kind === 'PERCENT' && input.value > 100) throw bad('a PERCENT value must be from 1 to 100');
+  const from = input.valid_from ? parseTime(input.valid_from, 'valid_from') : null;
+  const to = input.valid_to ? parseTime(input.valid_to, 'valid_to') : null;
+  if (from !== null && to !== null && from >= to) throw bad('valid_from must be before valid_to');
+  const tierId = input.tier_id ?? null;
+  if (tierId && !db.prepare('SELECT 1 FROM tiers WHERE id = ? AND event_id = ?').get(tierId, eventId)) {
+    throw new AppError('NOT_FOUND', 404, 'Tier not found in this event');
+  }
+
+  const id = randomId('promo');
+  const code = input.code.trim().toLowerCase();
+  try {
+    db.prepare(
+      `INSERT INTO promo_codes (id, event_id, code, kind, value, max_uses, valid_from, valid_to, tier_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(id, eventId, code, input.kind, input.value, input.max_uses ?? null, from, to, tierId, clockNow());
+  } catch (e) {
+    if ((e as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      throw new AppError('PROMO_EXISTS', 409, 'That code already exists for this event');
+    }
+    throw e;
+  }
+  return {
+    promo: {
+      id,
+      code,
+      kind: input.kind,
+      value: input.value,
+      max_uses: input.max_uses ?? null,
+      used: 0,
+      valid_from: from === null ? null : iso(from),
+      valid_to: to === null ? null : iso(to),
+      tier_id: tierId,
+    },
+  };
 }

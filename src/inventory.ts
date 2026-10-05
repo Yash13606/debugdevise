@@ -88,6 +88,10 @@ export const release = (db: Db, eventId: string, lines: Line[]): void =>
 export const convert = (db: Db, eventId: string, lines: Line[]): void =>
   adjust(db, eventId, lines, 'held = held - :q, sold = sold + :q', 'held >= :q');
 
+/** Tickets were refunded: their seats leave `sold` on the tiers and the pool. */
+export const returnSold = (db: Db, eventId: string, lines: Line[]): void =>
+  adjust(db, eventId, lines, 'sold = sold - :q', 'sold >= :q');
+
 // ---- reads: availability is always computed fresh, never cached (PRD FR-2) ----
 
 export const eventJson = (e: EventRow) => ({

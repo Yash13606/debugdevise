@@ -1,8 +1,12 @@
 // Cross-connection races: N worker threads, each with its OWN database connection, run every round
-// behind an Atomics barrier so the writers really collide (used by KT1-db and the KT3 check-in race).
+// behind an Atomics barrier so the writers really collide (used by KT1-db, the KT3 check-in race and the refund-versus-scan race).
 import { Worker } from 'node:worker_threads';
 
-export type Round = { kind: 'hold'; eventId: string; tierId: string } | { kind: 'scan'; qr: string };
+export type Round =
+  | { kind: 'hold'; eventId: string; tierId: string }
+  | { kind: 'scan'; qr: string }
+  // worker 0 scans the ticket while every other worker refunds it
+  | { kind: 'scanVsRefund'; qr: string; orderId: string; ticketId: string };
 export type RoundResult = { ok: true } | { ok: false; code: string };
 
 export interface RaceJob {

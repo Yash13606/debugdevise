@@ -174,5 +174,5 @@ The admin stats endpoint recomputes I3 and I5 from rows and reports differences.
 ## 5. Derived values
 - Tier available = `min(tier.capacity − tier.sold − tier.held, event.capacity − event.sold − event.held)`, floored at 0.
 - Queue position = `COUNT(*)` of `WAITING` entries for the event with `seq ≤ this.seq` (1 = next to be admitted).
-- Ticket `paid_cents`: the order discount is spread over tickets in proportion to unit price using floor division; the remaining cents go one each to the first tickets in creation order, so the per-ticket values sum exactly to the order total.
+- Ticket `paid_cents`: the order discount is spread over the eligible tickets (those of `promo.tier_id`, or all tickets when it is null) in proportion to unit price, using floor division. The leftover discount cents go one each to the first eligible tickets, in creation order, that still pay something (a free ticket never goes negative), so the per-ticket values sum exactly to the order total. Example: three tickets of 100 with a discount of 10 pay 96, 97 and 97.
 - Discount: `PERCENT` → `floor(eligible_subtotal × value / 100)`; `FIXED` → `min(value, eligible_subtotal)`; eligible = lines for `promo.tier_id`, or all lines when null.

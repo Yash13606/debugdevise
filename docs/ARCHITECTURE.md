@@ -92,7 +92,7 @@ BEGIN IMMEDIATE
     INSERT holds (status ACTIVE, expires_at = now + HOLD_TTL_SECONDS*1000, token_hash), INSERT hold_items
 COMMIT
 ```
-Any `409/422/403` above is thrown, so the transaction rolls back and **nothing** (counters, promo use, admission) is consumed. Tier updates run in ascending id order before the event update, which is also the lock order to use on PostgreSQL.
+The promo code is trimmed and lower-cased before the lookup. Any `409/422/403` above is thrown, so the transaction rolls back and **nothing** (counters, promo use, admission) is consumed. Tier updates run in ascending id order before the event update, which is also the lock order to use on PostgreSQL.
 
 ### 4.2 expireDueHolds(now)  *(KT2)*
 ```
@@ -183,7 +183,7 @@ The single-writer transaction makes the read-then-insert safe. On PostgreSQL tak
 ```
 BEGIN IMMEDIATE
  order = SELECT …; 404 if missing
- targets = listed ticket_ids (each must belong to the order) or all tickets of the order
+ targets = listed ticket_ids (each must belong to the order, else 404 NOT_FOUND), or, when omitted, every ticket of the order that is not yet VOID (none left → 409 ALREADY_REFUNDED)
  if any target is CHECKED_IN → 409 TICKET_CHECKED_IN
  if any target is already VOID → 409 ALREADY_REFUNDED
  per target: UPDATE tickets SET status='VOID', voided_at=:now WHERE id=:id AND order_id=:o AND status='VALID'
@@ -224,8 +224,8 @@ COMMIT
 | `LOG_LEVEL` | `info` | Fastify logger level |
 
 ## 7. Testing strategy
-- **Where:** `test/killer/` holds KT1, KT1-n, KT1-db, KT1-pool, KT2, KT3 (PRD §6); `test/unit/` the rest. Each test creates its own temp database file and config.
-- **Parallelism:** `Promise.all` of `app.inject()` calls for HTTP-level races; `worker_threads` for KT1-db — each worker opens its **own** `better-sqlite3` connection to the same file, waits on a shared `Atomics` barrier, then calls `createHold`. The test passes only if exactly one worker succeeds.
+- **Where:** `test/killer/` holds KT1, KT1-n, KT1-db, KT1-pool, KT2, KT3 (PRD §6) and two further cross-connection races (a check-in race and a refund-versus-scan race) that share the same worker harness; `test/unit/` the rest. Each test creates its own temp database file and config.
+- **Parallelism:** `Promise.all` of `app.inject()` calls for HTTP-level races. These are logically parallel, but inside one process the handlers run one at a time (SQLite access is synchronous), so they test the rules, not lock contention. Real contention is tested with `worker_threads` (KT1-db and the two races above): each worker opens its **own** `better-sqlite3` connection to the same file, waits on a shared `Atomics` barrier, then runs the operation. KT1-db passes only if exactly one worker gets the last ticket.
 - **Time:** KT2 uses `HOLD_TTL_SECONDS=1` and waits 1.5 s; unit tests may instead override `clock.now()`.
 - **Invariants:** a helper runs the invariant check (DATA_MODEL §3) after each test.
 - **Repeat:** race tests loop (≥ 20 iterations) to catch flakiness.

@@ -4,6 +4,7 @@ import { AppError } from './errors.js';
 import { normaliseEmail, randomId, randomToken, safeEqual, sha256 } from './ids.js';
 import * as inventory from './inventory.js';
 import * as payments from './payments.js';
+import * as promo from './promo.js';
 
 const notFound = (what: string) => new AppError('NOT_FOUND', 404, `${what} not found`);
 const bad = (message: string) => new AppError('VALIDATION_ERROR', 400, message);
@@ -13,6 +14,7 @@ const notActive = () => new AppError('HOLD_NOT_ACTIVE', 409, 'The hold is no lon
 export interface HoldInput {
   email: string;
   items: { tier_id: string; quantity: number }[];
+  promo_code?: string | null;
 }
 
 interface HoldRow {
@@ -70,8 +72,12 @@ function holdJson(h: HoldRow, items: ItemRow[]) {
 function closeHold(db: Db, holdId: string, status: 'EXPIRED' | 'RELEASED', now: number): boolean {
   const closed = db.prepare(`UPDATE holds SET status = ?, closed_at = ? WHERE id = ? AND status = 'ACTIVE'`).run(status, now, holdId);
   if (closed.changes === 0) return false;
-  const eventId = db.prepare('SELECT event_id FROM holds WHERE id = ?').pluck().get(holdId) as string;
-  inventory.release(db, eventId, loadItems(db, holdId).map((i) => ({ tierId: i.tier_id, quantity: i.quantity })));
+  const h = db.prepare('SELECT event_id, promo_code_id FROM holds WHERE id = ?').get(holdId) as {
+    event_id: string;
+    promo_code_id: string | null;
+  };
+  inventory.release(db, h.event_id, loadItems(db, holdId).map((i) => ({ tierId: i.tier_id, quantity: i.quantity })));
+  if (h.promo_code_id) promo.returnUse(db, h.promo_code_id);
   return true;
 }
 
@@ -133,15 +139,24 @@ export function createHold(ctx: Ctx, eventId: string, input: HoldInput) {
       return { tierId: item.tier_id, quantity: item.quantity, unitPrice: tier.price_cents };
     });
 
+    let code: promo.Promo | null = null;
+    if (input.promo_code) {
+      code = promo.reserveUse(db, eventId, input.promo_code, now);
+      if (!promo.appliesTo(code, lines.map((l) => l.tierId))) {
+        throw new AppError('PROMO_INVALID', 422, 'The promo code cannot be used (NOT_APPLICABLE)', { reason: 'NOT_APPLICABLE' });
+      }
+    }
+
     inventory.reserve(db, eventId, lines, now);
 
     const quantity = lines.reduce((sum, l) => sum + l.quantity, 0);
     const subtotal = lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
+    const discount = code ? promo.discountFor(code, lines) : 0;
     db.prepare(
       `INSERT INTO holds (id, event_id, email, email_norm, token_hash, status, quantity_total,
-                          subtotal_cents, discount_cents, total_cents, created_at, expires_at)
-       VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?, 0, ?, ?, ?)`,
-    ).run(holdId, eventId, input.email.trim(), emailNorm, sha256(holdToken), quantity, subtotal, subtotal, now, now + config.holdTtlSeconds * 1000);
+                          subtotal_cents, discount_cents, total_cents, promo_code_id, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(holdId, eventId, input.email.trim(), emailNorm, sha256(holdToken), quantity, subtotal, discount, subtotal - discount, code?.id ?? null, now, now + config.holdTtlSeconds * 1000);
     const addItem = db.prepare('INSERT INTO hold_items (hold_id, tier_id, quantity, unit_price_cents) VALUES (?, ?, ?, ?)');
     for (const l of [...lines].sort((a, b) => (a.tierId < b.tierId ? -1 : 1))) addItem.run(holdId, l.tierId, l.quantity, l.unitPrice);
 
@@ -243,11 +258,16 @@ export function payHold(ctx: Ctx, holdId: string, token: string | undefined, inp
       `INSERT INTO tickets (id, order_id, event_id, tier_id, qr_token, status, paid_cents, created_at)
        VALUES (?, ?, ?, ?, ?, 'VALID', ?, ?)`,
     );
-    for (const item of items) {
-      for (let n = 0; n < item.quantity; n++) {
-        addTicket.run(randomId('tkt'), orderId, h.event_id, item.tier_id, randomToken(), item.unit_price_cents, now);
-      }
-    }
+    const promoTier = h.promo_code_id
+      ? (db.prepare('SELECT tier_id FROM promo_codes WHERE id = ?').pluck().get(h.promo_code_id) as string | null)
+      : null;
+    const seats = items.flatMap((i) => Array.from({ length: i.quantity }, () => i));
+    const paid = promo.spreadDiscount(
+      seats.map((s) => s.unit_price_cents),
+      seats.map((s) => promoTier === null || s.tier_id === promoTier),
+      h.discount_cents,
+    );
+    seats.forEach((seat, n) => addTicket.run(randomId('tkt'), orderId, h.event_id, seat.tier_id, randomToken(), paid[n], now));
     return { replay: false, ...orderView(db, h.id) };
   });
 }

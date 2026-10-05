@@ -29,6 +29,30 @@ const holdToken = (req: FastifyRequest) => {
   return typeof v === 'string' ? v : undefined;
 };
 
+const promoBody = {
+  type: 'object',
+  required: ['code', 'kind', 'value'],
+  additionalProperties: false,
+  properties: {
+    code: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,32}$' },
+    kind: { type: 'string', enum: ['PERCENT', 'FIXED'] },
+    value: { type: 'integer', minimum: 1, maximum: 1_000_000_000 },
+    max_uses: { type: ['integer', 'null'], minimum: 1, maximum: 1_000_000_000 },
+    valid_from: { type: ['string', 'null'], maxLength: 40 },
+    valid_to: { type: ['string', 'null'], maxLength: 40 },
+    tier_id: { type: ['string', 'null'], maxLength: 64 },
+  },
+};
+
+const refundBody = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    ticket_ids: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'string', minLength: 1, maxLength: 64 } },
+    reason: { type: 'string', maxLength: 500 },
+  },
+};
+
 const checkinBody = {
   type: 'object',
   required: ['qr'],
@@ -80,6 +104,7 @@ const holdBody = {
   additionalProperties: false,
   properties: {
     email: { type: 'string', minLength: 3, maxLength: 254 },
+    promo_code: { type: ['string', 'null'], minLength: 1, maxLength: 64 },
     items: {
       type: 'array',
       minItems: 1,
@@ -179,6 +204,16 @@ export function buildApp(ctx: Ctx): FastifyInstance {
 
       adminApp.post('/events', { schema: { body: eventBody } }, async (req, reply) =>
         reply.code(201).send(admin.createEvent(ctx, req.body as admin.EventInput)),
+      );
+
+      adminApp.post(
+        '/events/:eventId/promo-codes',
+        { schema: { params: idParam('eventId'), body: promoBody } },
+        async (req, reply) => reply.code(201).send(admin.createPromo(ctx, (req.params as EventParams).eventId, req.body as admin.PromoInput)),
+      );
+
+      adminApp.post('/orders/:orderId/refund', { schema: { params: idParam('orderId'), body: refundBody } }, async (req) =>
+        tickets.refund(ctx, (req.params as { orderId: string }).orderId, req.body as tickets.RefundInput),
       );
 
       adminApp.post('/events/:eventId/tiers', { schema: { params: idParam('eventId'), body: tierBody } }, async (req, reply) =>

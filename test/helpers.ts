@@ -148,6 +148,19 @@ export const releaseHold = (t: TestApp, holdId: string, token: string) =>
 export const scan = (t: TestApp, qr: string, gate: string | null = 'north-1', headers: Record<string, string> = GATE) =>
   t.app.inject({ method: 'POST', url: '/api/checkin', headers, payload: gate === null ? { qr } : { qr, gate } });
 
+export const createPromo = (t: TestApp, eventId: string, body: Record<string, unknown>, headers: Record<string, string> = ADMIN) =>
+  t.app.inject({ method: 'POST', url: `/api/admin/events/${eventId}/promo-codes`, headers, payload: body });
+
+/** Create a promo code (default: FRESHER10, 10% off, unlimited) and return it. */
+export async function newPromo(t: TestApp, eventId: string, body: Record<string, unknown> = {}): Promise<Json> {
+  const res = await createPromo(t, eventId, { code: 'FRESHER10', kind: 'PERCENT', value: 10, ...body });
+  expect(res.statusCode, res.body).toBe(201);
+  return res.json().promo;
+}
+
+export const refund = (t: TestApp, orderId: string, payload: Record<string, unknown> = {}, headers: Record<string, string> = ADMIN) =>
+  t.app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/refund`, headers, payload });
+
 export const getOrder = (t: TestApp, orderId: string, token: string) =>
   t.app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: holdToken(token) });
 

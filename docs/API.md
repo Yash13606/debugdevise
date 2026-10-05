@@ -42,6 +42,7 @@ Times in responses are ISO-8601 UTC strings. Money is integer minor units (`*_ce
 | 409 | `TICKET_CHECKED_IN` | Refund refused: already admitted |
 | 409 | `ALREADY_REFUNDED` | Ticket already void |
 | 409 | `QUEUE_NOT_ENABLED` | Event has no waiting room |
+| 409 | `PROMO_EXISTS` | The event already has this promo code (any letter case) |
 | 410 | `HOLD_EXPIRED` | Hold expired |
 | 422 | `PROMO_INVALID` | `details.reason`: `NOT_FOUND`, `NOT_STARTED`, `EXPIRED`, `EXHAUSTED`, `NOT_APPLICABLE` |
 | 422 | `MAX_PER_ORDER` | Quantity above tier `max_per_order` |
@@ -149,7 +150,7 @@ Refusals (every attempt is written to `scan_log`):
 
 ### `POST /api/admin/events/:eventId/promo-codes`
 `{ "code": "FRESHER10", "kind": "PERCENT", "value": 10, "max_uses": 200, "valid_from": null, "valid_to": null, "tier_id": null }` → `201 { "promo": {…} }`
-(`code` is stored lower-case; lookups are case-insensitive.)
+(`code`: letters, digits, `_` and `-`, up to 32 characters; stored lower-case; lookups are case-insensitive and ignore surrounding spaces. A PERCENT `value` is 1–100. `tier_id` must be a tier of this event. The response `promo` is `{ id, code, kind, value, max_uses, used, valid_from, valid_to, tier_id }`.) Errors: `400`, `404` (event or tier), `409 PROMO_EXISTS`.
 
 ### `PATCH /api/admin/events/:eventId`
 `{ "queue_enabled": true|false }` → `200 { "event": {…} }`
@@ -165,12 +166,12 @@ Refusals (every attempt is written to `scan_log`):
 ```
 
 ### `POST /api/admin/orders/:orderId/refund`
-`{ "ticket_ids": ["tkt_1"], "reason": "student request" }` (omit `ticket_ids` to refund all). `200`:
+`{ "ticket_ids": ["tkt_1"], "reason": "student request" }`. `ticket_ids` (a non-empty list) must belong to the order; omit it to refund every ticket of the order that is not yet refunded. `reason` is accepted and not stored. `200`:
 ```json
 { "order": { "id": "ord_x", "status": "PARTIALLY_REFUNDED", "refunded_cents": 44910 },
   "voided_ticket_ids": ["tkt_1"], "refunded_cents": 44910 }
 ```
-Errors: `404`, `409 TICKET_CHECKED_IN | ALREADY_REFUNDED`.
+Errors: `404` (order, or a listed ticket not in the order), `409 TICKET_CHECKED_IN | ALREADY_REFUNDED`. A refund is all or nothing.
 
 ### `POST /api/admin/sweep` and `POST /api/admin/queue/tick`  *(operational/test helpers)*
 Run the hold sweeper and one admission tick immediately. `200 { "expired": 3 }` / `200 { "admitted": 25 }`.
