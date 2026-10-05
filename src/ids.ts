@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { AppError } from './errors.js';
 
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
@@ -14,6 +14,10 @@ export function randomId(prefix: string): string {
 export const randomToken = (): string => randomBytes(16).toString('base64url');
 
 export const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
+
+/** Constant-time string comparison (both sides are hashed first, so the lengths always match). */
+export const safeEqual = (a: string, b: string): boolean =>
+  timingSafeEqual(Buffer.from(sha256(a)), Buffer.from(sha256(b)));
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const invalid = () => new AppError('VALIDATION_ERROR', 400, 'A valid email address is required');

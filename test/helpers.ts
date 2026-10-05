@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { expect } from 'vitest';
+import { setClock } from '../src/clock.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { openDb, type Ctx, type Db } from '../src/db.js';
 import { buildApp } from '../src/http.js';
@@ -30,6 +31,7 @@ export function openTempDb(path: string = tempDbPath()): Db {
 
 /** Close apps and databases, then delete the temp folders (Windows keeps open files locked). */
 export async function cleanupTemp(): Promise<void> {
+  setClock(null);
   for (const app of apps.splice(0)) await app.close();
   for (const db of dbs.splice(0)) {
     try {
@@ -117,6 +119,30 @@ export function placeHold(
     payload: { email, items, ...extra },
   });
 }
+
+export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Freeze the application clock at `start`; `advance` moves it. `cleanupTemp` restores the real clock. */
+export function fakeClock(start = Date.UTC(2026, 9, 6, 12, 0, 0)) {
+  let t = start;
+  setClock(() => t);
+  return {
+    advance: (ms: number) => {
+      t += ms;
+    },
+  };
+}
+
+const holdToken = (token: string) => ({ 'x-hold-token': token });
+
+export const getHold = (t: TestApp, holdId: string, token: string) =>
+  t.app.inject({ method: 'GET', url: `/api/holds/${holdId}`, headers: holdToken(token) });
+
+export const payHold = (t: TestApp, holdId: string, token: string, payload: Record<string, unknown> = {}) =>
+  t.app.inject({ method: 'POST', url: `/api/holds/${holdId}/pay`, headers: holdToken(token), payload });
+
+export const releaseHold = (t: TestApp, holdId: string, token: string) =>
+  t.app.inject({ method: 'DELETE', url: `/api/holds/${holdId}`, headers: holdToken(token) });
 
 /** GET /api/events/:id: the public availability view. */
 export async function getEvent(t: TestApp, eventId: string): Promise<Json> {

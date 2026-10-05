@@ -66,6 +66,28 @@ export function reserve(db: Db, eventId: string, lines: Line[], now: number): vo
   }
 }
 
+const outOfStep = () => new AppError('INTERNAL', 500, 'Inventory counters are out of step');
+
+/** One counter change on every line and, summed, on the pool. A guard matching no row means the counters are broken. */
+function adjust(db: Db, eventId: string, lines: Line[], set: string, guard: string): void {
+  const tier = db.prepare(`UPDATE tiers SET ${set} WHERE id = :id AND ${guard}`);
+  const pool = db.prepare(`UPDATE events SET ${set} WHERE id = :id AND ${guard}`);
+  let total = 0;
+  for (const { tierId, quantity } of lines) {
+    if (tier.run({ id: tierId, q: quantity }).changes !== 1) throw outOfStep();
+    total += quantity;
+  }
+  if (pool.run({ id: eventId, q: total }).changes !== 1) throw outOfStep();
+}
+
+/** A hold ended without a sale: its seats go back to the tiers and the pool. */
+export const release = (db: Db, eventId: string, lines: Line[]): void =>
+  adjust(db, eventId, lines, 'held = held - :q', 'held >= :q');
+
+/** A hold was paid: held becomes sold in the same statements, so held + sold never changes. */
+export const convert = (db: Db, eventId: string, lines: Line[]): void =>
+  adjust(db, eventId, lines, 'held = held - :q, sold = sold + :q', 'held >= :q');
+
 // ---- reads: availability is always computed fresh, never cached (PRD FR-2) ----
 
 export const eventJson = (e: EventRow) => ({

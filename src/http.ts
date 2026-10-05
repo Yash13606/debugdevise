@@ -1,19 +1,16 @@
 // Routes, auth headers, JSON-schema validation and error mapping. No SQL and no business rules here.
-import { timingSafeEqual } from 'node:crypto';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import * as admin from './admin.js';
 import { iso, now } from './clock.js';
 import type { Ctx } from './db.js';
 import { AppError } from './errors.js';
 import * as holds from './holds.js';
-import { sha256 } from './ids.js';
-
-const same = (a: string, b: string) => timingSafeEqual(Buffer.from(sha256(a)), Buffer.from(sha256(b)));
+import { safeEqual } from './ids.js';
 
 /** onRequest hook: the named header must equal the expected key (compared in constant time). */
 const requireKey = (header: string, expected: string) => async (req: FastifyRequest) => {
   const given = req.headers[header];
-  if (typeof given !== 'string' || !same(given, expected)) {
+  if (typeof given !== 'string' || !safeEqual(given, expected)) {
     throw new AppError('UNAUTHORIZED', 401, 'Missing or invalid key');
   }
 };
@@ -24,6 +21,21 @@ const idParam = (name: string) => ({
   properties: { [name]: { type: 'string', minLength: 1, maxLength: 64 } },
 });
 type EventParams = { eventId: string };
+type HoldParams = { holdId: string };
+
+const holdToken = (req: FastifyRequest) => {
+  const v = req.headers['x-hold-token'];
+  return typeof v === 'string' ? v : undefined;
+};
+
+const payBody = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    payment_method: { type: 'string', enum: ['mock'] },
+    simulate: { type: 'string', enum: ['success', 'decline'] },
+  },
+};
 
 const eventBody = {
   type: 'object',
@@ -82,7 +94,7 @@ export function buildApp(ctx: Ctx): FastifyInstance {
     ajv: { customOptions: { removeAdditional: false, coerceTypes: false, useDefaults: false, allErrors: false } },
   });
 
-  // An empty body counts as {} (pay and release have no required fields).
+  // An empty JSON body counts as {}.
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
     const text = (body as string).trim();
     if (text === '') return done(null, {});
@@ -91,6 +103,11 @@ export function buildApp(ctx: Ctx): FastifyInstance {
     } catch {
       done(new AppError('VALIDATION_ERROR', 400, 'Request body is not valid JSON'));
     }
+  });
+
+  // A request without a body counts as {} (pay and release have no required fields).
+  app.addHook('preValidation', async (req) => {
+    if (req.body === undefined) req.body = {};
   });
 
   app.setErrorHandler((err, req, reply) => {
@@ -120,9 +137,24 @@ export function buildApp(ctx: Ctx): FastifyInstance {
     reply.code(201).send(holds.createHold(ctx, (req.params as EventParams).eventId, req.body as holds.HoldInput)),
   );
 
+  app.get('/api/holds/:holdId', { schema: { params: idParam('holdId') } }, async (req) =>
+    holds.getHold(ctx, (req.params as HoldParams).holdId, holdToken(req)),
+  );
+
+  app.delete('/api/holds/:holdId', { schema: { params: idParam('holdId') } }, async (req) =>
+    holds.releaseHold(ctx, (req.params as HoldParams).holdId, holdToken(req)),
+  );
+
+  app.post('/api/holds/:holdId/pay', { schema: { params: idParam('holdId'), body: payBody } }, async (req, reply) => {
+    const { replay, order, tickets } = holds.payHold(ctx, (req.params as HoldParams).holdId, holdToken(req), req.body as holds.PayInput);
+    return reply.code(replay ? 200 : 201).send({ order, tickets });
+  });
+
   app.register(
     async (adminApp) => {
       adminApp.addHook('onRequest', requireKey('x-admin-key', config.adminApiKey));
+
+      adminApp.post('/sweep', async () => ({ expired: holds.expireDueHolds(ctx) }));
 
       adminApp.post('/events', { schema: { body: eventBody } }, async (req, reply) =>
         reply.code(201).send(admin.createEvent(ctx, req.body as admin.EventInput)),
