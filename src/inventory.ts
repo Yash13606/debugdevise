@@ -119,6 +119,12 @@ export const tierJson = (t: TierRow, e: EventRow) => ({
   sale_ends_at: t.sale_ends_at === null ? null : iso(t.sale_ends_at),
 });
 
+/** All events, soonest first, with the seats still available in the pool (GET /api/events). */
+export function listEvents(db: Db) {
+  const events = db.prepare('SELECT * FROM events ORDER BY starts_at, created_at, id').all() as EventRow[];
+  return events.map((e) => ({ id: e.id, name: e.name, starts_at: iso(e.starts_at), available: Math.max(0, e.capacity - e.sold - e.held) }));
+}
+
 /** The event, its tiers and live availability, read in one snapshot. Null when the event is unknown. */
 export function readEvent(db: Db, eventId: string, currency: string) {
   return db.transaction(() => {

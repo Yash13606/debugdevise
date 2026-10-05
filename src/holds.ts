@@ -95,15 +95,25 @@ export function expireDueHolds(ctx: Ctx): number {
   return runTx(ctx.db, () => expireDue(ctx.db, clockNow()));
 }
 
-/** Event, tiers and live availability (GET /api/events/:eventId). Due holds are expired first. */
-export function availability(ctx: Ctx, eventId: string) {
-  const { db } = ctx;
-  if (db.prepare(`SELECT 1 FROM holds WHERE status = 'ACTIVE' AND expires_at <= ? LIMIT 1`).get(clockNow())) {
+/** Availability reads free due holds first, but only open a write transaction when one exists. */
+function expireIfDue(ctx: Ctx): void {
+  if (ctx.db.prepare(`SELECT 1 FROM holds WHERE status = 'ACTIVE' AND expires_at <= ? LIMIT 1`).get(clockNow())) {
     expireDueHolds(ctx);
   }
-  const view = inventory.readEvent(db, eventId, ctx.config.currency);
+}
+
+/** Event, tiers and live availability (GET /api/events/:eventId). Due holds are expired first. */
+export function availability(ctx: Ctx, eventId: string) {
+  expireIfDue(ctx);
+  const view = inventory.readEvent(ctx.db, eventId, ctx.config.currency);
   if (!view) throw notFound('Event');
   return view;
+}
+
+/** GET /api/events: every event with its live availability. */
+export function listEvents(ctx: Ctx) {
+  expireIfDue(ctx);
+  return { events: inventory.listEvents(ctx.db) };
 }
 
 // ---- reserve (ARCHITECTURE 4.1) ----
@@ -235,6 +245,17 @@ function orderView(db: Db, holdId: string) {
     order: { id: o.id, status: o.status, total_cents: o.total_cents, refunded_cents: o.refunded_cents, paid_at: iso(o.paid_at) },
     tickets: tickets.map((t) => ({ id: t.id, tier_id: t.tier_id, status: t.status, qr_payload: `AP1:${t.qr_token}` })),
   };
+}
+
+/** The QR payload of a ticket, for its buyer (GET /api/tickets/:id/qr.svg draws it). */
+export function ticketQr(ctx: Ctx, ticketId: string, token: string | undefined): string {
+  const { db } = ctx;
+  const t = db
+    .prepare('SELECT t.qr_token, o.hold_id FROM tickets t JOIN orders o ON o.id = t.order_id WHERE t.id = ?')
+    .get(ticketId) as { qr_token: string; hold_id: string } | undefined;
+  if (!t) throw notFound('Ticket');
+  authorise(loadHold(db, t.hold_id), token);
+  return `AP1:${t.qr_token}`;
 }
 
 /** GET /api/orders/:id: needs the token of the hold the order came from. */

@@ -159,7 +159,7 @@ CREATE TABLE scan_log (
 | **I6** | A hold leaves `ACTIVE` exactly once; counters for it are released or converted exactly once. |
 | **I7** | At most one live (`WAITING`/`ADMITTED`) queue entry per `(event, email_norm)`. |
 
-The admin stats endpoint recomputes I3 and I5 from rows and reports differences.
+The admin stats endpoint recomputes the invariants from the rows and reports every difference as `{ rule, subject, expected, actual }`: I1 and I2 (`expected` is the capacity that `sold + held` must not exceed), I3 and I5 (counters against the rows), I4 (a ticket in an impossible state, such as a checked-in ticket that is also void), I6 (a hold has a closing time exactly when it has left `ACTIVE`) and I7. The test helper runs the same check after every test.
 
 ## 4. State machines
 

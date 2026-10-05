@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { expect } from 'vitest';
+import { checkInvariants } from '../src/admin.js';
 import { setClock } from '../src/clock.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { openDb, type Ctx, type Db } from '../src/db.js';
@@ -14,6 +15,7 @@ export const GATE = { 'x-gate-key': 'change-me-gate' };
 const dirs: string[] = [];
 const dbs: Db[] = [];
 const apps: FastifyInstance[] = [];
+const made: TestApp[] = [];
 
 /** A fresh database path inside a new temp folder. */
 export function tempDbPath(): string {
@@ -29,9 +31,17 @@ export function openTempDb(path: string = tempDbPath()): Db {
   return db;
 }
 
-/** Close apps and databases, then delete the temp folders (Windows keeps open files locked). */
+/**
+ * Check the invariants of every app the test made (I-1: after any test, no mismatches), then close apps
+ * and databases and delete the temp folders (Windows keeps open files locked).
+ */
 export async function cleanupTemp(): Promise<void> {
   setClock(null);
+  const broken = made
+    .splice(0)
+    .filter((t) => t.checkInvariants)
+    .map((t) => checkInvariants(t.db))
+    .filter((r) => !r.ok);
   for (const app of apps.splice(0)) await app.close();
   for (const db of dbs.splice(0)) {
     try {
@@ -47,6 +57,7 @@ export async function cleanupTemp(): Promise<void> {
       /* temp folder; the OS cleans it up later */
     }
   }
+  if (broken.length > 0) throw new Error(`invariants broken at the end of the test: ${JSON.stringify(broken[0]!.mismatches)}`);
 }
 
 export interface TestApp {
@@ -55,6 +66,8 @@ export interface TestApp {
   db: Db;
   config: Config;
   path: string;
+  /** Set to false in a test that damages the data on purpose. */
+  checkInvariants: boolean;
 }
 
 /** An app on its own temp database. Timers are off; tests sweep and tick by hand. */
@@ -72,7 +85,9 @@ export async function makeApp(env: Record<string, string> = {}): Promise<TestApp
   const app = buildApp(ctx);
   await app.ready();
   apps.push(app);
-  return { app, ctx, db, config, path };
+  const t: TestApp = { app, ctx, db, config, path, checkInvariants: true };
+  made.push(t);
+  return t;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -1,5 +1,6 @@
 // Routes, auth headers, JSON-schema validation and error mapping. No SQL and no business rules here.
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import QRCode from 'qrcode';
 import * as admin from './admin.js';
 import { iso, now } from './clock.js';
 import type { Ctx } from './db.js';
@@ -181,6 +182,8 @@ export function buildApp(ctx: Ctx): FastifyInstance {
 
   app.get('/health', async () => ({ ok: true, time: iso(now()) }));
 
+  app.get('/api/events', async () => holds.listEvents(ctx));
+
   app.get('/api/events/:eventId', { schema: { params: idParam('eventId') } }, async (req) =>
     holds.availability(ctx, (req.params as EventParams).eventId),
   );
@@ -216,6 +219,11 @@ export function buildApp(ctx: Ctx): FastifyInstance {
     holds.getOrder(ctx, (req.params as { orderId: string }).orderId, holdToken(req)),
   );
 
+  app.get('/api/tickets/:ticketId/qr.svg', { schema: { params: idParam('ticketId') } }, async (req, reply) => {
+    const payload = holds.ticketQr(ctx, (req.params as { ticketId: string }).ticketId, holdToken(req));
+    return reply.type('image/svg+xml').send(await QRCode.toString(payload, { type: 'svg', margin: 2 }));
+  });
+
   app.post(
     '/api/checkin',
     { onRequest: requireKey('x-gate-key', config.gateApiKey), schema: { body: checkinBody } },
@@ -227,6 +235,10 @@ export function buildApp(ctx: Ctx): FastifyInstance {
       adminApp.addHook('onRequest', requireKey('x-admin-key', config.adminApiKey));
 
       adminApp.post('/sweep', async () => ({ expired: holds.expireDueHolds(ctx) }));
+
+      adminApp.get('/events/:eventId/stats', { schema: { params: idParam('eventId') } }, async (req) =>
+        admin.stats(ctx, (req.params as EventParams).eventId),
+      );
 
       adminApp.post('/queue/tick', async () => ({ admitted: queue.tick(ctx) }));
 

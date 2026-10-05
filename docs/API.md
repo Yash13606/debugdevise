@@ -164,6 +164,7 @@ Refusals (every attempt is written to `scan_log`):
   "queue": { "WAITING": 300, "ADMITTED": 25, "USED": 400, "EXPIRED": 20 },
   "invariants": { "ok": true, "mismatches": [] } }
 ```
+Due holds are expired first, so the numbers are current. Each mismatch is `{ "rule": "I3", "subject": "tier tier_a held", "expected": 2, "actual": 3 }` (DATA_MODEL §3).
 
 ### `POST /api/admin/orders/:orderId/refund`
 `{ "ticket_ids": ["tkt_1"], "reason": "student request" }`. `ticket_ids` (a non-empty list) must belong to the order; omit it to refund every ticket of the order that is not yet refunded. `reason` is accepted and not stored. `200`:
