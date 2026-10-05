@@ -1,10 +1,17 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
+import type { Config } from './config.js';
 import { AppError } from './errors.js';
 import { SCHEMA_SQL } from './schema.js';
 
 export type Db = Database.Database;
+
+/** What every operation needs: a connection and the settings. */
+export interface Ctx {
+  db: Db;
+  config: Config;
+}
 
 /** Open the database, set the pragmas (DATA_MODEL section 1) and create the schema when the file is new. */
 export function openDb(path: string): Db {

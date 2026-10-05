@@ -50,7 +50,7 @@ request ─► http.ts            auth headers, JSON-schema validation, error ma
 every operation ─► db.ts      one BEGIN IMMEDIATE transaction per request
 timers (index.ts): sweeper ─► holds.expireDueHolds      queue ticker ─► queue.tick
 ```
-Rules: (1) `http.ts` contains no SQL; (2) no module imports `http.ts`; (3) only `holds.ts` and `tickets.ts` call `inventory.ts`; (4) `inventory.ts` imports only `db.ts` and `errors.ts`; (5) only the operations shown under `http.ts` open a transaction — `inventory.ts`, `promo.ts` and `payments.ts` are plain functions that run inside the caller's transaction; (6) tests may call any module directly against a test database.
+Rules: (1) `http.ts` contains no SQL; (2) no module imports `http.ts`; (3) only `holds.ts` and `tickets.ts` call the counter-changing functions of `inventory.ts` (its read helpers, which build the event and tier JSON, may be used by `admin.ts` too); (4) `inventory.ts` imports only `db.ts`, `errors.ts` and `clock.ts`; (5) only the operations shown under `http.ts` open a transaction — `inventory.ts`, `promo.ts` and `payments.ts` are plain functions that run inside the caller's transaction; (6) tests may call any module directly against a test database.
 Example, `pay`: `http.ts` → `holds.payHold` → inside one transaction: check the hold → `payments.charge` → `inventory.convert` → insert order and tickets → back to `http.ts`, which maps the result to JSON.
 
 ## 3. Concurrency model

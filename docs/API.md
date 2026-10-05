@@ -45,6 +45,7 @@ Times in responses are ISO-8601 UTC strings. Money is integer minor units (`*_ce
 | 410 | `HOLD_EXPIRED` | Hold expired |
 | 422 | `PROMO_INVALID` | `details.reason`: `NOT_FOUND`, `NOT_STARTED`, `EXPIRED`, `EXHAUSTED`, `NOT_APPLICABLE` |
 | 422 | `MAX_PER_ORDER` | Quantity above tier `max_per_order` |
+| 500 | `INTERNAL` | Unexpected failure; the cause is logged, never returned |
 
 ## Public
 
