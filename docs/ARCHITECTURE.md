@@ -11,7 +11,7 @@
 | Dev | `tsx` |
 No Redis, no queue broker, no external services. One process, one database file.
 
-Scripts: `dev`, `build`, `start`, `test` (everything), `killer` (KT1, KT1-n, KT1-db, KT1-pool, KT2, KT3 only), `rush` (5,000-buyer simulation).
+Scripts: `dev` (`tsx watch src/index.ts`), `build` (type-check only: `tsc --noEmit`), `start` (`tsx src/index.ts`; no build step is needed to run), `test` (everything), `killer` (KT1, KT1-n, KT1-db, KT1-pool, KT2, KT3 only), `rush` (5,000-buyer simulation).
 
 ## 2. Layout
 ```
@@ -203,6 +203,7 @@ COMMIT
 - The application never reads an AI key; there is no AI dependency.
 
 ## 6. Configuration (`.env`; every value has a default; invalid values stop startup)
+`.env` is read with Node's built-in `process.loadEnvFile()` when the file exists (no extra dependency); real environment variables take precedence; the application also runs with no `.env` at all, using the defaults below.
 | Variable | Default | Meaning |
 |---|---|---|
 | `PORT` | `3000` | HTTP port |
