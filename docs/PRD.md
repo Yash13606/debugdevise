@@ -81,7 +81,7 @@ Then promo codes, then the two improvements (§7).
 | B-1 | `MAX_TICKETS_PER_BUYER = 4`; email `a+x@g.com` then `a@g.com` ask 3 + 2. | Second request `409 BUYER_LIMIT` |
 | I-1 | After any test, run the invariant check. | No mismatches |
 
-A rush simulation script (`scripts/rush.ts`) fires 5,000 parallel hold requests at one tier of capacity 5,000 − k and prints successes, sold-outs, and the invariant check. Its result is informational, not an acceptance gate.
+A rush simulation script (`scripts/rush.ts`) fires 5,000 parallel hold requests at one tier of capacity 5,000 − k and prints successes, sold-outs, and the invariant check. The default is k = 500 (4,500 seats); `npm run rush -- --buyers N --capacity C` overrides both numbers. It runs in one process against a temporary database, sending the requests through the HTTP stack without a network. Its result is informational, not an acceptance gate.
 
 ## 7. The two improvements
 
