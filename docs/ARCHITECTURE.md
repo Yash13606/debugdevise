@@ -19,6 +19,7 @@ src/
   config.ts      env parsing with defaults (§6); throws on invalid values
   clock.ts       now() → Date.now(); overridable in tests
   db.ts          open DB, pragmas, run schema (DATA_MODEL §2), transaction helper
+  schema.ts      the DDL of DATA_MODEL §2 as one string (a test keeps it identical to the document)
   ids.ts         randomId(prefix), randomToken(), sha256(), normaliseEmail()
   errors.ts      AppError(code, httpStatus, message, details)
   inventory.ts   ONLY module that changes tiers/events held|sold counters
@@ -30,7 +31,7 @@ src/
   admin.ts       create event/tier/promo, patch event, stats + invariant check, manual sweep and queue tick
   http.ts        route table, auth hooks, error mapper
   index.ts       build app, start timers (sweeper, queue ticker), listen
-test/  killer/*.test.ts  and  unit/*.test.ts
+test/  killer/*.test.ts  and  unit/*.test.ts   (helpers.ts: temp databases)
 scripts/rush.ts
 ```
 `inventory.ts` is the deep module: a small interface (`reserve`, `release`, `convert`, `returnSold`) hiding all counter SQL. No other module writes `held` or `sold`.
@@ -208,14 +209,14 @@ COMMIT
 |---|---|---|
 | `PORT` | `3000` | HTTP port |
 | `DATABASE_PATH` | `./data/atomicpass.db` | SQLite file (`:memory:` allowed in tests) |
-| `HOLD_TTL_SECONDS` | `600` | Hold lifetime; tests use `1`–`2` |
+| `HOLD_TTL_SECONDS` | `600` | Hold lifetime in whole seconds (≥ 1); tests use `1`–`2` |
 | `HOLD_SWEEP_INTERVAL_MS` | `5000` | Sweeper period (`0` disables; correctness unaffected) |
 | `DEFAULT_MAX_PER_ORDER` | `6` | Default `max_per_order` for new tiers |
 | `MAX_TICKETS_PER_BUYER` | `4` | Per-buyer cap per event (`0` = off) |
 | `QUEUE_TICK_MS` | `2000` | Admission tick period (`0` disables the timer; tests call the tick directly) |
 | `QUEUE_ADMIT_PER_TICK` | `25` | Entries admitted per tick |
 | `QUEUE_MAX_ADMITTED` | `100` | Max unused admissions at once |
-| `QUEUE_ADMIT_TTL_SECONDS` | `120` | Admission lifetime |
+| `QUEUE_ADMIT_TTL_SECONDS` | `120` | Admission lifetime in whole seconds (≥ 1) |
 | `ADMIN_API_KEY` | `change-me-admin` | Admin header value |
 | `GATE_API_KEY` | `change-me-gate` | Gate header value |
 | `PAYMENT_MODE` | `mock` | Only `mock` exists |

@@ -1,0 +1,31 @@
+{
+  "name": "atomicpass",
+  "version": "1.0.0",
+  "description": "AtomicPass: concurrency-safe event ticketing with holds, pooled capacity, single-use QR check-in and a waiting room.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "killer": "vitest run test/killer",
+    "rush": "tsx scripts/rush.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "fastify": "5.12.5",
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "26.6.4",
+    "@types/qrcode": "1.5.6",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}
