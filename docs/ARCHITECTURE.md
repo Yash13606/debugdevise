@@ -26,7 +26,7 @@ src/
   queue.ts       join, status, admit tick, consume admission
   holds.ts       createHold, releaseHold, expireDueHolds, payHold
   tickets.ts     checkIn, refund
-  admin.ts       create event/tier/promo, stats + invariant check
+  admin.ts       create event/tier/promo, patch event, stats + invariant check, manual sweep and queue tick
   http.ts        route table, auth hooks, error mapper
   index.ts       build app, start timers (sweeper, queue ticker), listen
 test/  killer/*.test.ts  and  unit/*.test.ts
@@ -49,7 +49,7 @@ BEGIN IMMEDIATE
  0. now = clock.now();  expireDueHolds(now)                       -- §4.2
  1. validate event exists; items non-empty; quantities ≥ 1; tier lines unique; each tier in this event
  2. per line: quantity ≤ tier.max_per_order else 422 MAX_PER_ORDER
- 3. if event.queue_enabled: consume admission (§4.6) else 403 NOT_ADMITTED
+ 3. if event.queue_enabled: consume admission (§4.6) and remember the entry id (stored as holds.queue_entry_id) else 403 NOT_ADMITTED
  4. per-buyer cap (§4.7)                                          -- 409 BUYER_LIMIT
  5. promo (if given):
       UPDATE promo_codes SET used = used + 1
@@ -97,7 +97,8 @@ BEGIN IMMEDIATE
  now = clock.now()
  h = SELECT * FROM holds WHERE id=:id            -- 404 if missing; token hash mismatch → 403 FORBIDDEN
  if h.status='CONVERTED' → return existing order (200, idempotent)
- if h.status IN ('EXPIRED','RELEASED') → 409 HOLD_NOT_ACTIVE (EXPIRED → 410 HOLD_EXPIRED)
+ if h.status = 'EXPIRED'  → 410 HOLD_EXPIRED
+ if h.status = 'RELEASED' → 409 HOLD_NOT_ACTIVE
  if h.expires_at <= now:  closeHold(h.id,'EXPIRED',now);  RETURN error 410 HOLD_EXPIRED   -- returned, so it commits
  result = payments.charge(h.total_cents, reference)     -- mock provider; decline → throw 402 PAYMENT_FAILED (rollback, hold stays ACTIVE)
  UPDATE holds SET status='CONVERTED', closed_at=:now WHERE id=:id AND status='ACTIVE' AND expires_at > :now

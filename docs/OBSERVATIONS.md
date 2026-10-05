@@ -45,6 +45,10 @@ Code is described in words only; none of it is reproduced here.
 
 **CAP-8 [R] Availability cache.** Public availability may be cached; default TTL 2 seconds (`backend/config/app.php:52`; `AvailableProductQuantitiesFetchService.php:50-55,112-114`). Order creation bypasses it.
 
+**CAP-9 [R] Tiers.** A "product" is a ticket type; a tiered product has several price rows (tiers), each with its own quantity and sale window. Price types: `PAID, FREE, DONATION, TIERED, REGISTRATION` (`backend/app/DomainObjects/Enums/ProductPriceType.php:9-13`); product types: `TICKET, GENERAL` (`ProductType.php:9-10`). With "sequential tier release" enabled, a later visible tier is locked while an earlier visible tier is not exhausted (`backend/app/DomainObjects/ProductDomainObject.php:110-131`); the lock is applied in the pre-check (`OrderCreateRequestValidationService.php:463`, `:630-634`). A product is sold out when every price row is (`ProductDomainObject.php:101-108`); a price row is sold out when its available quantity is 0, or `quantity_sold ≥ initial` (`backend/app/DomainObjects/ProductPriceDomainObject.php:86-101`). Sale windows exist on both product (`ProductDomainObject.php:164-174`) and price row (`ProductPriceDomainObject.php:74-84`).
+
+**CAP-10 [A] Some rules are checked only in the unlocked pre-check.** Visibility, sale window, min/max per order and tier locking are validated in the pre-check (CAP-1). The locked handler (`CreateOrderHandler.php:56-103`, read in full) re-checks event status, availability/capacity, occurrence purchasability (`:162-170`) and promo usage, but none of those four rules.
+
 ## 3. Holds and expiry
 
 **HOLD-1 [R] Representation.** A hold is the order itself: `status = RESERVED`, `reserved_until = now + timeout` (`OrderManagementService.php:43,48-49`). The timeout comes from event settings (`CreateOrderHandler.php:82`).
@@ -95,6 +99,8 @@ Code is described in words only; none of it is reproduced here.
 
 **PROMO-4 [R]** `max_allowed_usages` is optional, ≥1, ≤9,999,999 (`backend/app/Http/Request/PromoCode/CreateUpdatePromoCodeRequest.php:28`). The preview endpoint is throttled (`backend/routes/api.php:761-762`).
 
+**PROMO-5 [R] Domain rules.** Discount types `NONE, FIXED, PERCENTAGE` (`backend/app/DomainObjects/Enums/PromoCodeDiscountTypeEnum.php:9-11`). A code is "valid" unless its expiry date has passed or the *stored* `order_usage_count` has reached `max_allowed_usages` (`backend/app/DomainObjects/PromoCodeDomainObject.php:48-59`). A code may be restricted to a list of products; an empty list means all (`:61-68`). A fixed discount whose scope is the whole order is an "order-level" discount (`:85-89`); it is allocated across lines (`OrderItemProcessingService.php:70-72`). The locked usage check calls this validity test first and then the live count (`PromoCodeUsageValidationService.php:21,31`).
+
 ## 7. Cancel and refunds
 
 **REF-1 [R] Cancel.** `backend/app/Services/Application/Handlers/Order/CancelOrderHandler.php:29-61`: transaction, guard "already cancelled" (`:42-44`) with **no lock**, then `OrderCancelService::cancelOrder` (`:46`). The service (`OrderCancelService.php:47-74`) decrements statistics (`:50`), lowers sold counters for attendees that are `ACTIVE` (or also `AWAITING_PAYMENT` for offline orders) (`:110-137`), restores non-ticket items (`:139-159`), sets attendees `CANCELLED` (`:98-108`), sets the order `CANCELLED` (`:161-171`), reverts waitlist offers (`:55`), emails the buyer (`:57`, `:76-96`) and dispatches `CapacityChangedEvent` per product/occurrence (`:173-194`).
@@ -132,4 +138,4 @@ Index seen: `(event_id, status, reserved_until, deleted_at)` on orders (`backend
 
 ## 10. Not traced (treat as unknown)
 
-Stripe refund-completion webhooks; offline-payment refunds; the waitlist offer lifecycle beyond the lines cited; recurring events and occurrences beyond the capacity maths; seat maps and seat claims (`backend/ee/Seating`); box-office flows beyond the lock and the terminal hold; `ProductPriceService` price/discount calculation; `PromoCodeDomainObject` validity rules; tier "locked behind earlier tier" logic; invoicing and statistics; end-to-end tests under `e2e/`.
+Stripe refund-completion webhooks; offline-payment refunds; the waitlist offer lifecycle beyond the lines cited; recurring events and occurrences beyond the capacity maths; seat maps and seat claims (`backend/ee/Seating`); box-office flows beyond the lock and the terminal hold; `ProductPriceService` price/discount arithmetic (how a percentage or fixed discount becomes a line price); the remainder of `ProductPriceDomainObject::isExhausted`; invoicing and statistics; end-to-end tests under `e2e/`.
