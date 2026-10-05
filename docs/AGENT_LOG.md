@@ -62,5 +62,63 @@ GAP-1, GAP-2 (impact), GAP-3, GAP-4 (impact), GAP-8, GAP-10, and the "two paths"
 ## Known limits of this work
 Static review only; nothing from the original was executed. Several areas were not examined (OBSERVATIONS §10). The rebuild outlined in the other documents had not been implemented at the time of writing.
 
+## Build session
+
+A second chat built the rebuild from these documents. This section records it.
+
+### Setup
+- **Agent:** Claude Code in the VS Code extension; model Claude Sonnet 5.5, in a new chat. It read `docs/` and a local build note kept outside the repository (order of work, deadlines, rules) and built from `docs/` only. The original's code and the other project folders were never opened.
+- **Caveat:** the chat's workspace was the parent folder, which also holds those folders, so the separation rested on the agent's discipline, not on the folder set-up. For the same reason the agent did not use tools that index the whole workspace (a code-graph index, shared memory tools).
+- **Skill used:** `tdd` (loaded once at the start). No sub-agents were started.
+- **Tests first:** every step began with failing tests, then the smallest code to pass them, then a commit and a push.
+
+### What the human decided
+- Whether to build in that chat at all. The first two messages the human pasted were the previous agent's reports with no request in them; the agent did not act on them and asked. The human then chose, in a multiple-choice prompt: build in this chat, the stack and both improvements are confirmed, no attribution lines in commits or pull-request text, and push to `origin/main` after every step (`git pull --rebase` first, never force-push).
+
+### What was built, step by step
+| Step | Built | Tests added |
+|---|---|---|
+| 4.0 | config, clock, db (schema copied from DATA_MODEL), ids, errors, `.env.example` | schema equals the document; CHECK constraints refuse `sold + held` above capacity |
+| 4.1 | `inventory.reserve`, `createHold`, admin create event and tier | KT1, KT1-n, KT1-db (worker threads, own connections, barrier) |
+| 4.2 | (the pool update was already part of reserve) | KT1-pool |
+| 4.3 | lazy and swept expiry, pay, release, orders, QR tickets, mock payments, `src/index.ts` | KT2, KT2-paid, pay, release and token tests |
+| 4.4 | check-in with one conditional update, order read | KT3, plus the same race across two connections |
+| 4.5 | no code; 20 consecutive runs of `npm run killer` | all green each time |
+| 4.6 | promo codes, refunds, discount spread over tickets | P-1, P-2, R-1, KT3-void, refund-versus-scan (HTTP and two connections) |
+| 4.7 | waiting room, per-buyer cap | Q-1, Q-2, B-1, one admission used from two connections, cap raced from two connections |
+| 4.8 | stats with the invariant audit, event list, QR image | I-1: the audit runs after every test |
+| 4.9 | `scripts/rush.ts` | a small rush with exact numbers |
+
+### Defects found in these documents while building, and what was corrected
+| # | Defect | Correction |
+|---|---|---|
+| 1 | ARCHITECTURE 4.6 said a re-join deletes the buyer's `USED` entry, but the hold that used it references the entry (foreign key), so the delete would fail | Old entries are kept; a re-join inserts a new row (the partial unique index only covers live entries) |
+| 2 | `NOT_ADMITTED` had no reason for an admission that was already used | Added `USED`; documented the order in which the reason is chosen |
+| 3 | DATA_MODEL 5 did not say whose cents "the remaining cents" are, whether a one-tier promo is spread over all tickets, or what happens to free tickets | Leftover discount cents; eligible tickets only; free tickets are skipped so no ticket goes negative |
+| 4 | A refund with no ticket list on a partly refunded order was ambiguous | It refunds every ticket not yet refunded; `ALREADY_REFUNDED` only when none is left |
+| 5 | A refund naming a ticket of another order had no defined answer | 404 NOT_FOUND |
+| 6 | A duplicate promo code had no error code | `409 PROMO_EXISTS` |
+| 7 | The rush script's "5,000 − k" had no k | Default k = 500, with options |
+| 8 | "Parallel" HTTP tests suggested lock contention that one process cannot produce | Documented; real contention is tested with worker threads |
+| 9 | The layout and component rules missed `schema.ts`, the test helpers, the read helpers in `inventory.ts` and the `clock.ts` import | Documents updated |
+| 10 | No `INTERNAL` error code; `gate` and whitespace in `qr` unspecified; mismatch shape of the audit and what it checks unspecified; TTL settings are whole seconds | Documented |
+
+### Mistakes made during the build, and how they were caught
+| # | Mistake | How it was caught |
+|---|---|---|
+| 1 | A first KT2-paid asked for more seats than `max_per_order` allows | The test failed with 422 instead of 409; the test was changed |
+| 2 | A test helper's default argument swallowed an explicit `undefined`, so a "no gate" scan still sent a gate | The test failed; the helper now takes `null` |
+| 3 | Adding the per-buyer cap broke three older tests that bought 20 to 40 tickets for one buyer | The full run; those tests now use several buyers or switch the cap off |
+| 4 | Expected a deferred transaction to break the check-in race; it did not, because the first statement there is already a write | Run as an experiment; the check-in tests were then tested by removing the conditional guard instead |
+| 5 | A sale-window test ignored that the default 10-minute hold lifetime expires holds during a two-hour clock jump | The test failed; it now uses a one-day lifetime |
+
+### Evidence that the tests can fail
+Each of these was done by a temporary edit, run and reverted; none was committed. A deferred transaction instead of `BEGIN IMMEDIATE` made KT1-db and the per-buyer cap race fail with "database is locked". Removing the pool guard made KT1-pool fail. Removing the `VALID` guard from check-in made every KT3 test fail, over HTTP and across connections. Loosening the promo limit made five promo tests fail.
+
+### Limits of the build
+- HTTP-level "parallel" requests run one at a time inside one process; only the worker-thread tests create real contention between connections.
+- SQLite admits one writer: a single machine is the ceiling. Statements are prepared on every call; a per-connection cache would raise throughput and was not needed to meet the documents.
+- Payments are a mock; there is no user interface.
+
 ## Human review notes
 *(Maintainers: add anything you checked or changed by hand here.)*
