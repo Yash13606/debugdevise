@@ -12,6 +12,17 @@ Times in responses are ISO-8601 UTC strings. Money is integer minor units (`*_ce
 - **Idempotency:** `pay` on an already-paid hold returns the existing order (`200`). Queue `join` for a live entry returns it unchanged (`200`).
 - **No caching:** availability is computed per request.
 
+## Who may call what
+| Route | Caller | Credential |
+|---|---|---|
+| `GET /health`, `GET /api/events`, `GET /api/events/:eventId` | anyone | none |
+| `POST /api/events/:eventId/queue` | buyer | none |
+| `GET /api/events/:eventId/queue` | the buyer who joined | `x-queue-token` |
+| `POST /api/events/:eventId/holds` | buyer | `x-queue-token` when the event has the queue enabled; otherwise none |
+| `GET /api/holds/:holdId`, `DELETE /api/holds/:holdId`, `POST /api/holds/:holdId/pay`, `GET /api/orders/:orderId`, `GET /api/tickets/:ticketId/qr.svg` | the buyer who created the hold | `x-hold-token` |
+| `POST /api/checkin` | gate staff | `x-gate-key` |
+| every `/api/admin/*` route | organiser | `x-admin-key` |
+
 ## Error codes
 | HTTP | `code` | When |
 |---|---|---|
@@ -97,8 +108,8 @@ Body `{ "payment_method": "mock", "simulate": "success" }` (`simulate` may be `s
 `201` (first time) or `200` (replay):
 ```json
 { "order": { "id": "ord_x", "status": "PAID", "total_cents": 89820, "refunded_cents": 0, "paid_at": "…Z" },
-  "tickets": [ { "id": "tkt_1", "tier_id": "tier_a", "status": "VALID", "qr_payload": "RP1:Vf0l…" },
-               { "id": "tkt_2", "tier_id": "tier_a", "status": "VALID", "qr_payload": "RP1:9aQm…" } ] }
+  "tickets": [ { "id": "tkt_1", "tier_id": "tier_a", "status": "VALID", "qr_payload": "AP1:Vf0l…" },
+               { "id": "tkt_2", "tier_id": "tier_a", "status": "VALID", "qr_payload": "AP1:9aQm…" } ] }
 ```
 Errors: `402 PAYMENT_FAILED` (hold remains active), `403`, `404`, `409 HOLD_NOT_ACTIVE`, `410 HOLD_EXPIRED`.
 
@@ -112,7 +123,7 @@ Errors: `402 PAYMENT_FAILED` (hold remains active), `403`, `404`, `409 HOLD_NOT_
 
 ### `POST /api/checkin`  header `x-gate-key`
 ```json
-{ "qr": "RP1:Vf0l…", "gate": "north-1" }
+{ "qr": "AP1:Vf0l…", "gate": "north-1" }
 ```
 `200`:
 ```json

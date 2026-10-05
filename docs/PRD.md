@@ -1,4 +1,4 @@
-# PRD — RushPass: rush-proof event ticketing
+# PRD — AtomicPass: concurrency-safe, rush-proof event ticketing
 
 ## 1. Problem
 A college fest releases **5,000 passes at 6 PM**. About 5,000 students press *Buy* in the same second. The system must:
@@ -44,7 +44,7 @@ Then promo codes, then the two improvements (§7).
 **FR-7 Promo codes.** `PERCENT` or `FIXED`, optional `max_uses`, optional validity window, optional single-tier restriction. Usage is counted atomically at hold time and returned on expiry, release and full refund. An invalid, expired or exhausted code **fails the request** with `422 PROMO_INVALID` and a `reason`; it is never silently ignored.
 *Accept:* with `max_uses = 1`, two concurrent holds using the code → exactly one succeeds.
 
-**FR-8 Tickets and QR.** Each ticket has a unique 128-bit random `qr_token`; the QR payload is `RP1:` + token.
+**FR-8 Tickets and QR.** Each ticket has a unique 128-bit random `qr_token`; the QR payload is `AP1:` + token.
 *Accept:* tokens are unique; two tickets never share a token.
 
 **FR-9 Check-in (gate).** Admits a ticket exactly once.
@@ -107,4 +107,4 @@ Capacity is enforced on the tier **and** the event pool in one atomic step that 
 Single currency; amounts are integers in minor units. One event pool per event. Payment provider is a deterministic mock. Gate devices are trusted with a shared key. Multi-node operation would need the same statements on PostgreSQL (ARCHITECTURE §8).
 
 ## 10. Glossary
-**Hold** — temporary reservation of quantity, expires. **Pool** — the event-wide capacity shared by all tiers. **Held / sold** — counters on tier and event. **Admission** — right, granted by the queue, to create one hold. **QR payload** — `RP1:` + ticket token.
+**Hold** — temporary reservation of quantity, expires. **Pool** — the event-wide capacity shared by all tiers. **Held / sold** — counters on tier and event. **Admission** — right, granted by the queue, to create one hold. **QR payload** — `AP1:` + ticket token.

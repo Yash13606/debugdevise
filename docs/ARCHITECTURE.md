@@ -23,6 +23,7 @@ src/
   errors.ts      AppError(code, httpStatus, message, details)
   inventory.ts   ONLY module that changes tiers/events held|sold counters
   promo.ts       reserve / return promo usage, discount calculation
+  payments.ts    mock provider, no network: charge(totalCents, reference, simulate) and refund(reference, cents)
   queue.ts       join, status, admit tick, consume admission
   holds.ts       createHold, releaseHold, expireDueHolds, payHold
   tickets.ts     checkIn, refund
@@ -33,6 +34,23 @@ test/  killer/*.test.ts  and  unit/*.test.ts
 scripts/rush.ts
 ```
 `inventory.ts` is the deep module: a small interface (`reserve`, `release`, `convert`, `returnSold`) hiding all counter SQL. No other module writes `held` or `sold`.
+
+### 2a. How the components talk
+```text
+request ─► http.ts            auth headers, JSON-schema validation, error mapping. No SQL, no business rules.
+             ├─► holds.ts     createHold · payHold · releaseHold · expireDueHolds
+             │     ├─► queue.ts      consume admission            (inside createHold)
+             │     ├─► promo.ts      reserve / return usage, discount maths
+             │     ├─► payments.ts   charge                       (inside payHold)
+             │     └─► inventory.ts  reserve · release · convert  (the only writer of held/sold)
+             ├─► tickets.ts   checkIn · refund ─► inventory.ts (returnSold), payments.ts (refund), promo.ts
+             ├─► queue.ts     join · status · tick
+             └─► admin.ts     create event/tier/promo · patch event · stats + invariants · manual sweep/tick
+every operation ─► db.ts      one BEGIN IMMEDIATE transaction per request
+timers (index.ts): sweeper ─► holds.expireDueHolds      queue ticker ─► queue.tick
+```
+Rules: (1) `http.ts` contains no SQL; (2) no module imports `http.ts`; (3) only `holds.ts` and `tickets.ts` call `inventory.ts`; (4) `inventory.ts` imports only `db.ts` and `errors.ts`; (5) only the operations shown under `http.ts` open a transaction — `inventory.ts`, `promo.ts` and `payments.ts` are plain functions that run inside the caller's transaction; (6) tests may call any module directly against a test database.
+Example, `pay`: `http.ts` → `holds.payHold` → inside one transaction: check the hold → `payments.charge` → `inventory.convert` → insert order and tickets → back to `http.ts`, which maps the result to JSON.
 
 ## 3. Concurrency model
 - Every state change is **one transaction opened with `BEGIN IMMEDIATE`** (`db.transaction(fn).immediate()`), so writers are serialised by the database and a failed step rolls everything back.
@@ -116,7 +134,7 @@ COMMIT
 ### 4.5 check-in  *(KT3)*
 ```
 BEGIN IMMEDIATE
- token = strip "RP1:" prefix (missing prefix → 404 INVALID_QR)
+ token = strip "AP1:" prefix (missing prefix → 404 INVALID_QR)
  UPDATE tickets SET status='CHECKED_IN', checked_in_at=:now, checked_in_gate=:gate
   WHERE qr_token=:token AND status='VALID'
  changes()=1 → log ADMITTED; return 200
@@ -188,7 +206,7 @@ COMMIT
 | Variable | Default | Meaning |
 |---|---|---|
 | `PORT` | `3000` | HTTP port |
-| `DATABASE_PATH` | `./data/rushpass.db` | SQLite file (`:memory:` allowed in tests) |
+| `DATABASE_PATH` | `./data/atomicpass.db` | SQLite file (`:memory:` allowed in tests) |
 | `HOLD_TTL_SECONDS` | `600` | Hold lifetime; tests use `1`–`2` |
 | `HOLD_SWEEP_INTERVAL_MS` | `5000` | Sweeper period (`0` disables; correctness unaffected) |
 | `DEFAULT_MAX_PER_ORDER` | `6` | Default `max_per_order` for new tiers |
