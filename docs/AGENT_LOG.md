@@ -40,6 +40,7 @@ An honest record of how an AI coding agent was used to produce the observations 
 | 4 | A search listing was cut off at its output limit while arguing that no code dispatches a capacity event on hold expiry. | Re-ran in file-list mode to get the full set (eleven files) before stating the claim. |
 | 5 | While drafting this documentation the agent wrote a **wrong class-file name** in a citation (HOLD-8). | Caught on re-reading its own output against the earlier search result; fixed in the same session. |
 | 6 | Assumed the scanner endpoints were public without having seen the end of the route group. | Read the group's closing lines and added the exact line range (`routes/api.php:714-833`). |
+| 7 | Cited a domain-object helper as the check-in list window gate without having read the validator the service actually calls. | Read `CheckInListActivityValidator`, corrected the citation in CHK-2. |
 
 ## Claims deliberately marked as analysis, not fact
 GAP-1, GAP-2 (impact), GAP-3, GAP-4 (impact), GAP-8, GAP-10, and the "two paths" outcome in CHK-3 are reasoned from the code but were **not executed or reproduced**. The documents say so wherever they appear.
