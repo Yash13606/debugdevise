@@ -29,7 +29,7 @@ Times in responses are ISO-8601 UTC strings. Money is integer minor units (`*_ce
 | 400 | `VALIDATION_ERROR` | Malformed body / parameters |
 | 401 | `UNAUTHORIZED` | Missing or wrong admin/gate key |
 | 403 | `FORBIDDEN` | Wrong hold/queue token |
-| 403 | `NOT_ADMITTED` | Queue enabled and admission missing/expired/for another email (`details.reason`: `WAITING`, `EXPIRED`, `EMAIL_MISMATCH`, `UNKNOWN_TOKEN`) |
+| 403 | `NOT_ADMITTED` | Queue enabled and admission missing, not yet given, used, expired or for another email (`details.reason`: `UNKNOWN_TOKEN`, `EMAIL_MISMATCH`, `WAITING`, `USED`, `EXPIRED`) |
 | 404 | `NOT_FOUND` | Unknown event/tier/hold/order |
 | 404 | `INVALID_QR` | Unknown or malformed QR |
 | 402 | `PAYMENT_FAILED` | Mock payment declined (hold stays active) |

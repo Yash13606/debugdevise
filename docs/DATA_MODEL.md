@@ -70,7 +70,7 @@ CREATE TABLE queue_entries (
   admit_expires_at INTEGER,
   used_at          INTEGER
 );
--- one live entry per buyer per event; USED/EXPIRED rows are replaced on re-join
+-- one live entry per buyer per event; USED/EXPIRED rows stay as history and a re-join adds a new row
 CREATE UNIQUE INDEX uq_queue_live ON queue_entries(event_id, email_norm)
   WHERE status IN ('WAITING','ADMITTED');
 CREATE INDEX idx_queue_order ON queue_entries(event_id, status, seq);

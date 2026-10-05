@@ -160,9 +160,10 @@ describe('expiry rules', () => {
     expect((await getEvent(t, event.id)).event).toMatchObject({ sold: 2, held: 0, available: 8 });
     expect((await getHold(t, hold.id, token)).json().hold.status).toBe('CONVERTED');
     expect((await payHold(t, hold.id, token)).json()).toEqual(paid.json());
-    // The two sold seats stay sold: of the 8 left, a buyer takes 6, and 3 more are then refused.
-    expect((await placeHold(t, event.id, 'b@x.com', [line(tier, 6)])).statusCode).toBe(201);
-    expect((await placeHold(t, event.id, 'c@x.com', [line(tier, 3)])).statusCode).toBe(409);
+    // The two sold seats stay sold: two buyers take the 8 left, and a third is refused.
+    expect((await placeHold(t, event.id, 'b@x.com', [line(tier, 4)])).statusCode).toBe(201);
+    expect((await placeHold(t, event.id, 'c@x.com', [line(tier, 4)])).statusCode).toBe(201);
+    expect((await placeHold(t, event.id, 'd@x.com', [line(tier, 1)])).statusCode).toBe(409);
   });
 });
 

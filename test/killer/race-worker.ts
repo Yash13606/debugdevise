@@ -20,8 +20,9 @@ job.rounds.forEach((round, r) => {
   try {
     if (round.kind === 'hold') {
       createHold(ctx, round.eventId, {
-        email: `worker${job.worker}-round${r}@x.com`,
-        items: [{ tier_id: round.tierId, quantity: 1 }],
+        email: round.email ?? `worker${job.worker}-round${r}@x.com`,
+        items: [{ tier_id: round.tierId, quantity: round.quantity ?? 1 }],
+        queue_token: round.queueToken,
       });
     } else if (round.kind === 'scan' || job.worker === 0) {
       checkIn(ctx, { qr: round.qr, gate: `worker-${job.worker}` });

@@ -6,7 +6,7 @@ afterEach(cleanupTemp);
 
 describe('refund versus scan on separate connections', () => {
   it('exactly one wins for every ticket, and the counters stay true', async () => {
-    const t = await makeApp();
+    const t = await makeApp({ MAX_TICKETS_PER_BUYER: '0' }); // one buyer buys all 40: the cap is not the subject here
     const event = await newEvent(t, { capacity: 40 });
     const tier = await newTier(t, event.id, { capacity: 40, max_per_order: 40, price_cents: 1000 });
     const { order, tickets } = await buyTickets(t, event.id, tier, 40);

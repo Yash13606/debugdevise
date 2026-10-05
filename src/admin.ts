@@ -101,3 +101,12 @@ export function createPromo(ctx: Ctx, eventId: string, input: PromoInput) {
     },
   };
 }
+
+/** PATCH /api/admin/events/:id: switch the waiting room on or off. */
+export function patchEvent(ctx: Ctx, eventId: string, input: { queue_enabled: boolean }) {
+  const { db, config } = ctx;
+  if (db.prepare('UPDATE events SET queue_enabled = ? WHERE id = ?').run(input.queue_enabled ? 1 : 0, eventId).changes === 0) {
+    throw new AppError('NOT_FOUND', 404, 'Event not found');
+  }
+  return { event: inventory.readEvent(db, eventId, config.currency)!.event };
+}

@@ -6,7 +6,7 @@ afterEach(cleanupTemp);
 
 describe('KT3 across connections: the gate race', () => {
   it('two worker threads scan the same QR at the same moment: exactly one is admitted, every ticket', async () => {
-    const t = await makeApp();
+    const t = await makeApp({ MAX_TICKETS_PER_BUYER: '0' }); // one buyer buys all 20: the cap is not the subject here
     const event = await newEvent(t, { capacity: 20 });
     const tier = await newTier(t, event.id, { capacity: 20, max_per_order: 20 });
     const { tickets } = await buyTickets(t, event.id, tier, 20);

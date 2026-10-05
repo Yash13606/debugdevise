@@ -5,6 +5,7 @@ import { normaliseEmail, randomId, randomToken, safeEqual, sha256 } from './ids.
 import * as inventory from './inventory.js';
 import * as payments from './payments.js';
 import * as promo from './promo.js';
+import * as queue from './queue.js';
 
 const notFound = (what: string) => new AppError('NOT_FOUND', 404, `${what} not found`);
 const bad = (message: string) => new AppError('VALIDATION_ERROR', 400, message);
@@ -15,6 +16,7 @@ export interface HoldInput {
   email: string;
   items: { tier_id: string; quantity: number }[];
   promo_code?: string | null;
+  queue_token?: string;
 }
 
 interface HoldRow {
@@ -106,6 +108,28 @@ export function availability(ctx: Ctx, eventId: string) {
 
 // ---- reserve (ARCHITECTURE 4.1) ----
 
+/** ARCHITECTURE 4.7: a buyer's active holds plus valid tickets, per event, stay within the cap (0 = off). */
+function checkBuyerCap(db: Db, eventId: string, emailNorm: string, requested: number, limit: number): void {
+  if (limit <= 0) return;
+  const holding = db
+    .prepare(
+      `SELECT COALESCE(SUM(hi.quantity), 0) FROM holds h JOIN hold_items hi ON hi.hold_id = h.id
+        WHERE h.event_id = ? AND h.email_norm = ? AND h.status = 'ACTIVE'`,
+    )
+    .pluck()
+    .get(eventId, emailNorm) as number;
+  const owned = db
+    .prepare(
+      `SELECT COUNT(*) FROM tickets t JOIN orders o ON o.id = t.order_id
+        WHERE t.event_id = ? AND o.email_norm = ? AND t.status IN ('VALID', 'CHECKED_IN')`,
+    )
+    .pluck()
+    .get(eventId, emailNorm) as number;
+  if (holding + owned + requested > limit) {
+    throw new AppError('BUYER_LIMIT', 409, 'Ticket limit per buyer reached', { limit, used: holding + owned, requested });
+  }
+}
+
 /**
  * Reserve seats: expire due holds, validate, take the seats from the tiers and the pool, record the hold,
  * all in one transaction. Any refusal is thrown, so nothing stays consumed.
@@ -118,7 +142,8 @@ export function createHold(ctx: Ctx, eventId: string, input: HoldInput) {
   return runTx(db, () => {
     const now = clockNow();
     expireDue(db, now);
-    if (!db.prepare('SELECT 1 FROM events WHERE id = ?').get(eventId)) throw notFound('Event');
+    const event = db.prepare('SELECT queue_enabled FROM events WHERE id = ?').get(eventId) as { queue_enabled: number } | undefined;
+    if (!event) throw notFound('Event');
     const emailNorm = normaliseEmail(input.email);
     if (!Array.isArray(input.items) || input.items.length === 0) throw bad('items must not be empty');
 
@@ -139,6 +164,9 @@ export function createHold(ctx: Ctx, eventId: string, input: HoldInput) {
       return { tierId: item.tier_id, quantity: item.quantity, unitPrice: tier.price_cents };
     });
 
+    const queueEntryId = event.queue_enabled ? queue.consume(db, eventId, input.queue_token, emailNorm, now) : null;
+    checkBuyerCap(db, eventId, emailNorm, lines.reduce((sum, l) => sum + l.quantity, 0), config.maxTicketsPerBuyer);
+
     let code: promo.Promo | null = null;
     if (input.promo_code) {
       code = promo.reserveUse(db, eventId, input.promo_code, now);
@@ -154,9 +182,9 @@ export function createHold(ctx: Ctx, eventId: string, input: HoldInput) {
     const discount = code ? promo.discountFor(code, lines) : 0;
     db.prepare(
       `INSERT INTO holds (id, event_id, email, email_norm, token_hash, status, quantity_total,
-                          subtotal_cents, discount_cents, total_cents, promo_code_id, created_at, expires_at)
-       VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(holdId, eventId, input.email.trim(), emailNorm, sha256(holdToken), quantity, subtotal, discount, subtotal - discount, code?.id ?? null, now, now + config.holdTtlSeconds * 1000);
+                          subtotal_cents, discount_cents, total_cents, promo_code_id, queue_entry_id, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(holdId, eventId, input.email.trim(), emailNorm, sha256(holdToken), quantity, subtotal, discount, subtotal - discount, code?.id ?? null, queueEntryId, now, now + config.holdTtlSeconds * 1000);
     const addItem = db.prepare('INSERT INTO hold_items (hold_id, tier_id, quantity, unit_price_cents) VALUES (?, ?, ?, ?)');
     for (const l of [...lines].sort((a, b) => (a.tierId < b.tierId ? -1 : 1))) addItem.run(holdId, l.tierId, l.quantity, l.unitPrice);
 

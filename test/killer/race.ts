@@ -3,7 +3,8 @@
 import { Worker } from 'node:worker_threads';
 
 export type Round =
-  | { kind: 'hold'; eventId: string; tierId: string }
+  // `email` and `quantity` default to a distinct buyer per worker and one seat; `queueToken` is sent as x-queue-token
+  | { kind: 'hold'; eventId: string; tierId: string; email?: string; quantity?: number; queueToken?: string }
   | { kind: 'scan'; qr: string }
   // worker 0 scans the ticket while every other worker refunds it
   | { kind: 'scanVsRefund'; qr: string; orderId: string; ticketId: string };

@@ -2,6 +2,7 @@ import { loadConfig, loadDotEnv } from './config.js';
 import { openDb } from './db.js';
 import { expireDueHolds } from './holds.js';
 import { buildApp } from './http.js';
+import { tick } from './queue.js';
 
 try {
   loadDotEnv();
@@ -20,6 +21,18 @@ try {
           app.log.error(err, 'hold sweeper failed');
         }
       }, config.holdSweepIntervalMs),
+    );
+  }
+
+  if (config.queueTickMs > 0) {
+    timers.push(
+      setInterval(() => {
+        try {
+          tick(ctx);
+        } catch (err) {
+          app.log.error(err, 'queue ticker failed');
+        }
+      }, config.queueTickMs),
     );
   }
 

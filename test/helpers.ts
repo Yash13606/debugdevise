@@ -161,6 +161,18 @@ export async function newPromo(t: TestApp, eventId: string, body: Record<string,
 export const refund = (t: TestApp, orderId: string, payload: Record<string, unknown> = {}, headers: Record<string, string> = ADMIN) =>
   t.app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/refund`, headers, payload });
 
+export const joinQueue = (t: TestApp, eventId: string, email: string) =>
+  t.app.inject({ method: 'POST', url: `/api/events/${eventId}/queue`, payload: { email } });
+
+export const queueStatus = (t: TestApp, eventId: string, token?: string) =>
+  t.app.inject({ method: 'GET', url: `/api/events/${eventId}/queue`, headers: token ? { 'x-queue-token': token } : {} });
+
+/** One admission tick for every queue-enabled event. */
+export const tick = (t: TestApp) => t.app.inject({ method: 'POST', url: '/api/admin/queue/tick', headers: ADMIN });
+
+export const patchEvent = (t: TestApp, eventId: string, payload: Record<string, unknown>, headers: Record<string, string> = ADMIN) =>
+  t.app.inject({ method: 'PATCH', url: `/api/admin/events/${eventId}`, headers, payload });
+
 export const getOrder = (t: TestApp, orderId: string, token: string) =>
   t.app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: holdToken(token) });
 

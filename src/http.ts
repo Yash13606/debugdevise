@@ -6,6 +6,7 @@ import type { Ctx } from './db.js';
 import { AppError } from './errors.js';
 import * as holds from './holds.js';
 import { safeEqual } from './ids.js';
+import * as queue from './queue.js';
 import * as tickets from './tickets.js';
 
 /** onRequest hook: the named header must equal the expected key (compared in constant time). */
@@ -24,10 +25,11 @@ const idParam = (name: string) => ({
 type EventParams = { eventId: string };
 type HoldParams = { holdId: string };
 
-const holdToken = (req: FastifyRequest) => {
-  const v = req.headers['x-hold-token'];
+const header = (req: FastifyRequest, name: string) => {
+  const v = req.headers[name];
   return typeof v === 'string' ? v : undefined;
 };
+const holdToken = (req: FastifyRequest) => header(req, 'x-hold-token');
 
 const promoBody = {
   type: 'object',
@@ -61,6 +63,20 @@ const checkinBody = {
     qr: { type: 'string', minLength: 1, maxLength: 200 },
     gate: { type: 'string', minLength: 1, maxLength: 64 },
   },
+};
+
+const joinBody = {
+  type: 'object',
+  required: ['email'],
+  additionalProperties: false,
+  properties: { email: { type: 'string', minLength: 3, maxLength: 254 } },
+};
+
+const patchEventBody = {
+  type: 'object',
+  required: ['queue_enabled'],
+  additionalProperties: false,
+  properties: { queue_enabled: { type: 'boolean' } },
 };
 
 const payBody = {
@@ -169,9 +185,19 @@ export function buildApp(ctx: Ctx): FastifyInstance {
     holds.availability(ctx, (req.params as EventParams).eventId),
   );
 
-  app.post('/api/events/:eventId/holds', { schema: { params: idParam('eventId'), body: holdBody } }, async (req, reply) =>
-    reply.code(201).send(holds.createHold(ctx, (req.params as EventParams).eventId, req.body as holds.HoldInput)),
+  app.post('/api/events/:eventId/queue', { schema: { params: idParam('eventId'), body: joinBody } }, async (req, reply) => {
+    const { created, ...entry } = queue.join(ctx, (req.params as EventParams).eventId, (req.body as { email: string }).email);
+    return reply.code(created ? 201 : 200).send(entry);
+  });
+
+  app.get('/api/events/:eventId/queue', { schema: { params: idParam('eventId') } }, async (req) =>
+    queue.status(ctx, (req.params as EventParams).eventId, header(req, 'x-queue-token')),
   );
+
+  app.post('/api/events/:eventId/holds', { schema: { params: idParam('eventId'), body: holdBody } }, async (req, reply) => {
+    const input = { ...(req.body as holds.HoldInput), queue_token: header(req, 'x-queue-token') };
+    return reply.code(201).send(holds.createHold(ctx, (req.params as EventParams).eventId, input));
+  });
 
   app.get('/api/holds/:holdId', { schema: { params: idParam('holdId') } }, async (req) =>
     holds.getHold(ctx, (req.params as HoldParams).holdId, holdToken(req)),
@@ -201,6 +227,12 @@ export function buildApp(ctx: Ctx): FastifyInstance {
       adminApp.addHook('onRequest', requireKey('x-admin-key', config.adminApiKey));
 
       adminApp.post('/sweep', async () => ({ expired: holds.expireDueHolds(ctx) }));
+
+      adminApp.post('/queue/tick', async () => ({ admitted: queue.tick(ctx) }));
+
+      adminApp.patch('/events/:eventId', { schema: { params: idParam('eventId'), body: patchEventBody } }, async (req) =>
+        admin.patchEvent(ctx, (req.params as EventParams).eventId, req.body as { queue_enabled: boolean }),
+      );
 
       adminApp.post('/events', { schema: { body: eventBody } }, async (req, reply) =>
         reply.code(201).send(admin.createEvent(ctx, req.body as admin.EventInput)),

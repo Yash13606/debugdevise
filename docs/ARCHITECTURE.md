@@ -148,7 +148,7 @@ COMMIT   (logs are written in the same transaction; refusals are returned, not t
 The refund path uses the same guard (`status='VALID'`), so a scan and a refund racing for one ticket have exactly one winner.
 
 ### 4.6 waiting room  *(the Differentiator)*
-- **Join** (`queue.join`): in one transaction, if a live entry (`WAITING`/`ADMITTED`) exists for `(event, email_norm)` return it unchanged (idempotent). Otherwise delete any `USED`/`EXPIRED` entry for that pair and insert a new `WAITING` entry (new `seq`, new `queue_token`). Joining an event with `queue_enabled = 0` → `409 QUEUE_NOT_ENABLED`.
+- **Join** (`queue.join`): in one transaction, if a live entry (`WAITING`/`ADMITTED`) exists for `(event, email_norm)` return it unchanged (idempotent). Otherwise insert a new `WAITING` entry (new `seq`, new `queue_token`); old `USED`/`EXPIRED` entries stay as history (a used entry is referenced by its hold, so it cannot be deleted, and the partial unique index only covers live entries). Admissions of the event whose time has passed are first marked `EXPIRED`, so a stale admission never blocks a re-join. Joining an event with `queue_enabled = 0` → `409 QUEUE_NOT_ENABLED`.
 - **Admit tick** every `QUEUE_TICK_MS` (and callable directly in tests), for each queue-enabled event:
 ```
 UPDATE queue_entries SET status='EXPIRED' WHERE status='ADMITTED' AND admit_expires_at <= :now
@@ -163,10 +163,11 @@ if n > 0:
 ```
 UPDATE queue_entries SET status='USED', used_at=:now
  WHERE queue_token=:t AND event_id=:e AND status='ADMITTED' AND admit_expires_at > :now AND email_norm=:email_norm
-changes()=0 → 403 NOT_ADMITTED {reason: WAITING | EXPIRED | EMAIL_MISMATCH | UNKNOWN_TOKEN}
+changes()=0 → 403 NOT_ADMITTED {reason: UNKNOWN_TOKEN | EMAIL_MISMATCH | WAITING | USED | EXPIRED}
 ```
+  The reason is found by re-reading the entry, in that order: no entry for this token and event → `UNKNOWN_TOKEN` (a missing token too); another email → `EMAIL_MISMATCH`; then by its status (`ADMITTED` past its time counts as `EXPIRED`).
   Because consume is inside the reservation transaction, a sold-out or invalid request rolls it back and the admission survives until its TTL.
-- **Status** returns `status`, `position`, `ahead`, `eta_seconds = ceil(position / QUEUE_ADMIT_PER_TICK) * QUEUE_TICK_MS / 1000`, `admit_expires_at`, and `sold_out` (event available = 0).
+- **Status** returns `status`, `position`, `ahead`, `eta_seconds = ceil(position / QUEUE_ADMIT_PER_TICK) * QUEUE_TICK_MS / 1000`, `admit_expires_at`, and `sold_out` (event available = 0). An `ADMITTED` entry whose time has passed is reported as `EXPIRED` at once, before any tick records it, so polling never needs a write. `position` and `ahead` are 0 unless the entry is `WAITING`; `admit_expires_at` is set only while `ADMITTED`; `eta_seconds` is rounded up to whole seconds.
 
 ### 4.7 per-buyer cap
 Inside reserve, if `MAX_TICKETS_PER_BUYER > 0`:
