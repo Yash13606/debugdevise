@@ -3,7 +3,7 @@
 ## 1. Stack (decided)
 | Concern | Choice |
 |---|---|
-| Runtime | Node.js ≥ 22, TypeScript (strict) |
+| Runtime | Node.js ≥ 22.12 (`better-sqlite3` needs 22, the test runner 22.12), TypeScript (strict) |
 | HTTP | Fastify (built-in JSON-schema validation) |
 | Database | SQLite via `better-sqlite3` (synchronous, WAL) |
 | QR image (optional endpoint) | `qrcode` |
