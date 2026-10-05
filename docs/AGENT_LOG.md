@@ -60,7 +60,7 @@ A script parsed every `path:line` citation in these documents and compared it wi
 GAP-1, GAP-2 (impact), GAP-3, GAP-4 (impact), GAP-8, GAP-10, and the "two paths" outcome in CHK-3 are reasoned from the code but were **not executed or reproduced**. The documents say so wherever they appear.
 
 ## Known limits of this work
-Static reading only; nothing in the original was run. Several areas were not traced (OBSERVATIONS §10). The rebuild described in the other documents has not been implemented at the time of writing.
+Static review only; nothing from the original was executed. Several areas were not examined (OBSERVATIONS §10). The rebuild outlined in the other documents had not been implemented at the time of writing.
 
 ## Human review notes
 *(Maintainers: add anything you checked or changed by hand here.)*
