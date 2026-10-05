@@ -87,7 +87,7 @@ A second chat built the rebuild from these documents. This section records it.
 | 4.6 | promo codes, refunds, discount spread over tickets | P-1, P-2, R-1, KT3-void, refund-versus-scan (HTTP and two connections) |
 | 4.7 | waiting room, per-buyer cap | Q-1, Q-2, B-1, one admission used from two connections, cap raced from two connections |
 | 4.8 | stats with the invariant audit, event list, QR image | I-1: the audit runs after every test |
-| 4.9 | `scripts/rush.ts` | a small rush with exact numbers |
+| 4.9 | `scripts/rush.ts`, and `scripts/demo.ts` (a narrated waiting-room and cap demo) | a small rush with exact numbers; the demo's outcomes |
 
 ### Defects found in these documents while building, and what was corrected
 | # | Defect | Correction |

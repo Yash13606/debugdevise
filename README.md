@@ -58,6 +58,7 @@ Run the third line again with another email: the answer is `{"error":{"code":"SO
 | `npm test` | every test (unit tests, the Killer Tests and the races) |
 | `npm run build` | type-check only (`tsc --noEmit`); `npm start` needs no build |
 | `npm run rush` | 5,000 buyers press buy at once for 4,500 seats; prints holds made, sold-outs and the invariant result (`-- --buyers N --capacity C` to change it) |
+| `npm run demo` | a narrated run of the waiting room and the per-buyer cap: ten buyers join, three are admitted per tick, an unadmitted buyer is refused with `403 NOT_ADMITTED`, and the cap refuses extra tickets with `409 BUYER_LIMIT` |
 | `npm run dev` | start with auto-restart on file changes |
 
 ## What the tests do and do not show

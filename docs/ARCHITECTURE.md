@@ -11,7 +11,7 @@
 | Dev | `tsx` |
 No Redis, no queue broker, no external services. One process, one database file.
 
-Scripts: `dev` (`tsx watch src/index.ts`), `build` (type-check only: `tsc --noEmit`), `start` (`tsx src/index.ts`; no build step is needed to run), `test` (everything), `killer` (everything in `test/killer`: KT1, KT1-n, KT1-db, KT1-pool, KT2, KT3 and the cross-connection races), `rush` (5,000-buyer simulation).
+Scripts: `dev` (`tsx watch src/index.ts`), `build` (type-check only: `tsc --noEmit`), `start` (`tsx src/index.ts`; no build step is needed to run), `test` (everything), `killer` (everything in `test/killer`: KT1, KT1-n, KT1-db, KT1-pool, KT2, KT3 and the cross-connection races), `rush` (5,000-buyer simulation), `demo` (a narrated run of the waiting room and the per-buyer cap).
 
 ## 2. Layout
 ```
@@ -32,7 +32,7 @@ src/
   http.ts        route table, auth hooks, error mapper
   index.ts       build app, start timers (sweeper, queue ticker), listen
 test/  killer/*.test.ts  and  unit/*.test.ts   (helpers.ts: temp databases)
-scripts/rush.ts
+scripts/rush.ts  demo.ts
 ```
 `inventory.ts` is the deep module: a small interface (`reserve`, `release`, `convert`, `returnSold`) hiding all counter SQL. No other module writes `held` or `sold`.
 
