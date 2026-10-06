@@ -11,9 +11,9 @@
 
 | GitHub | Name |
 |---|---|
-| Yash13606 | (real name to be added by the team) |
-| ayushb89 | (real name to be added by the team) |
-| gkavin2527 | (real name to be added by the team) |
+| Yash13606 | A Yash |
+| ayushb89 | Ayush |
+| gkavin2527 | G Kavin |
 
 ## The original we studied
 
