@@ -70,7 +70,7 @@ A second chat built the rebuild from these documents. This section records it.
 - **Agent:** Claude Code in the VS Code extension; model Claude Sonnet 5.5, in a new chat. It read `docs/` and a local build note kept outside the repository (order of work, deadlines, rules) and built from `docs/` only. The original's code and the other project folders were never opened.
 - **Caveat:** the chat's workspace was the parent folder, which also holds those folders, so the separation rested on the agent's discipline, not on the folder set-up. For the same reason the agent did not use tools that index the whole workspace (a code-graph index, shared memory tools).
 - **Skill used:** `tdd` (loaded once at the start). No sub-agents were started.
-- **Tests first:** every step began with failing tests, then the smallest code to pass them, then a commit and a push.
+- **Tests first:** each step began with failing tests, then the smallest code to pass them, then a commit and a push. The exceptions were written after the code they check: KT1-pool, the races across connections (check-in, per-buyer cap, admission) and the validation, sale-window and start-up tests. Each of those except the admission race and the start-up test was then shown to fail by temporarily removing the guard it covers.
 
 ### What the human decided
 - Whether to build in that chat at all. The first two messages the human pasted were the previous agent's reports with no request in them; the agent did not act on them and asked. The human then chose, in a multiple-choice prompt: build in this chat, the stack and both improvements are confirmed, no attribution lines in commits or pull-request text, and push to `origin/main` after every step (`git pull --rebase` first, never force-push).
