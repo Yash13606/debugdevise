@@ -14,7 +14,7 @@ npm run killer
 npm start
 ```
 
-`npm run killer` runs the concurrency tests. `npm start` serves the API at http://localhost:3000 (try `/health`). It needs Node.js 22.12 or newer; it was developed and tested on Node 24.13 on Windows 11.
+`npm run killer` runs the concurrency tests (14 tests in 9 files, a few seconds). `npm start` serves the API at http://localhost:3000 (try `/health`). It needs Node.js 22.12 or newer; it was developed and tested on Node 24.13 on Windows 11.
 
 **Settings.** Every setting has a default, so no `.env` is needed. To change one, copy `.env.example` to `.env`. Time limits are in seconds (names ending in `_MS` are milliseconds). A real environment variable beats `.env`, and a wrong value stops start-up with a message that names it. No setting is a secret except the two keys, which are placeholders you should change.
 
@@ -55,7 +55,7 @@ Run the third line again with another email: the answer is `{"error":{"code":"SO
 
 | Command | What it does |
 |---|---|
-| `npm test` | every test (unit tests, the Killer Tests and the races) |
+| `npm test` | every test: 163 tests in 24 files (unit tests, the Killer Tests and the races) |
 | `npm run build` | type-check only (`tsc --noEmit`); `npm start` needs no build |
 | `npm run rush` | 5,000 buyers press buy at once for 4,500 seats; prints holds made, sold-outs and the invariant result (`-- --buyers N --capacity C` to change it) |
 | `npm run demo` | a narrated run of the waiting room and the per-buyer cap: ten buyers join, three are admitted per tick, an unadmitted buyer is refused with `403 NOT_ADMITTED`, and the cap refuses extra tickets with `409 BUYER_LIMIT` |
@@ -65,7 +65,8 @@ Run the third line again with another email: the answer is `{"error":{"code":"SO
 
 - Requests sent together over HTTP (`Promise.all` of `app.inject`) are handled one at a time by a single process, so those tests check the rules. Real contention between database connections is tested only by the worker-thread tests.
 - After every test, an audit recomputes the counters from the rows (the invariants in [docs/DATA_MODEL.md](docs/DATA_MODEL.md)) and the test fails if they differ. The same audit is in `GET /api/admin/events/:id/stats`.
-- SQLite admits one writer, so one machine is the ceiling. `npm run rush` measures it: in one run on the development laptop, 5,000 requests took 5.7 s.
+- `npm run killer` was run 20 times in a row on the final code with no failure. (An earlier attempt stopped when the laptop went to sleep mid-run and every test timed out at once; that attempt was discarded and the check was repeated from the start.)
+- SQLite admits one writer, so one machine is the ceiling. `npm run rush` measures it: in two runs on the development laptop, 5,000 requests took 5.7 s and 4.9 s (about 1,000 per second, one process, not tuned).
 
 ## Documentation
 

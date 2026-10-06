@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AtomicPass: Concurrency-Safe Ticketing</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif; color: #1b2430; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  :root { --ink: #1b2430; --muted: #5b6675; --teal: #0b6e6e; --teal-soft: #dff0ee; --rust: #a8431f; --rust-soft: #f6e4dc; --paper: #fbfaf7; --line: #d9d5cb; }
+  .slide { width: 1280px; height: 720px; position: relative; overflow: hidden; background: var(--paper); padding: 44px 64px 40px; break-after: page; page-break-after: always; }
+  .slide:last-child { break-after: auto; page-break-after: auto; }
+  .kicker { font-size: 15px; letter-spacing: .12em; text-transform: uppercase; color: var(--teal); font-weight: 700; margin: 0 0 10px; }
+  h1 { font-size: 66px; line-height: 1.02; margin: 0 0 10px; letter-spacing: -.02em; }
+  h2 { font-size: 36px; line-height: 1.12; margin: 0 0 6px; letter-spacing: -.01em; }
+  .sub { font-size: 20px; color: var(--muted); margin: 0 0 22px; }
+  .foot { position: absolute; left: 64px; right: 64px; bottom: 22px; display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  code, pre { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; }
+  code { font-size: .88em; background: #eeebe3; padding: 1px 5px; border-radius: 3px; }
+  .teal { color: var(--teal); }
+  .rust { color: var(--rust); }
+
+  /* slide 1 */
+  .s1 .grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 56px; margin-top: 26px; }
+  .quote { font-size: 27px; line-height: 1.3; border-left: 6px solid var(--teal); padding: 4px 0 4px 22px; margin: 6px 0 26px; }
+  .req { display: flex; gap: 16px; align-items: flex-start; margin: 0 0 16px; font-size: 22px; line-height: 1.3; }
+  .req b.n { flex: none; width: 38px; height: 38px; border-radius: 50%; background: var(--teal); color: #fff; display: grid; place-items: center; font-size: 20px; }
+  .answer { margin-top: 30px; background: var(--teal-soft); border-radius: 10px; padding: 18px 22px; font-size: 21px; line-height: 1.35; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 16px; background: #fff; }
+
+  /* slide 2 */
+  table { border-collapse: collapse; width: 100%; font-size: 15.5px; line-height: 1.28; }
+  th { text-align: left; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 0 12px 8px 0; border-bottom: 2px solid var(--ink); }
+  td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.ev { font-family: Consolas, "Cascadia Mono", monospace; font-size: 13.2px; color: #33404f; }
+  td.weak { color: var(--rust); font-weight: 600; }
+  .note { margin-top: 12px; font-size: 14.5px; color: var(--muted); }
+
+  /* slide 3 */
+  .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 18px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px 15px 14px; position: relative; font-size: 17px; line-height: 1.34; }
+  .card h3 { margin: 0 0 8px; font-size: 21px; }
+  .card .tag { position: absolute; top: -11px; right: 10px; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; background: var(--teal); color: #fff; padding: 3px 9px; border-radius: 999px; }
+  .card pre { margin: 8px 0 0; font-size: 12.6px; line-height: 1.35; background: #f1efe8; padding: 8px 9px; border-radius: 6px; white-space: pre-wrap; }
+  .arrow { color: var(--teal); font-weight: 700; }
+  .nets { margin-top: 22px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .net { border-left: 5px solid var(--teal); background: var(--teal-soft); padding: 14px 16px; font-size: 17px; line-height: 1.32; border-radius: 0 8px 8px 0; }
+
+  /* slide 4 */
+  .s4 .cols { display: grid; grid-template-columns: 1.35fr 1fr; gap: 28px; margin-top: 12px; }
+  .term { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; background: #12202b; color: #d7e4ec; border-radius: 10px; padding: 14px 16px; font-size: 12.2px; line-height: 1.42; white-space: pre; overflow: hidden; }
+  .term .ok { color: #7fd6a0; }
+  .term .dim { color: #8aa2b3; }
+  .stats { display: grid; gap: 12px; }
+  .stat { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+  .stat b { display: block; font-size: 30px; color: var(--teal); letter-spacing: -.01em; }
+  .stat span { font-size: 15.5px; color: var(--muted); line-height: 1.3; display: block; }
+  .teeth { margin-top: 12px; font-size: 14.5px; line-height: 1.35; background: var(--rust-soft); border-radius: 8px; padding: 10px 14px; }
+
+  /* slide 5 */
+  .s5 .cols { display: grid; grid-template-columns: 1fr 1.05fr; gap: 40px; margin-top: 14px; }
+  .cmd { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; background: #12202b; color: #d7e4ec; border-radius: 10px; padding: 16px 20px; font-size: 19px; line-height: 1.6; white-space: pre; }
+  .cmd .c { color: #8aa2b3; }
+  .env { margin-top: 16px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; font-size: 18px; line-height: 1.4; }
+  ol.demo { margin: 0; padding-left: 28px; font-size: 21px; line-height: 1.36; }
+  ol.demo li { margin-bottom: 10px; }
+  ol.demo li span { color: var(--muted); font-size: 17.5px; display: block; }
+</style>
+</head>
+<body>
+
+<!-- 1. Problem and brief -->
+<section class="slide s1">
+  <p class="kicker">FinTech · PS 01 “The Box Office” · Team DBG-462</p>
+  <h1>AtomicPass</h1>
+  <p class="sub">Concurrency-safe, rush-proof event ticketing</p>
+  <div class="grid">
+    <div>
+      <p class="quote">A college fest releases <b>5,000 passes at 6 PM</b>. About 5,000 students press <b>Buy</b> in the same second.</p>
+      <div class="req"><b class="n">1</b><div><b>Never oversell.</b> Not by one ticket, not across tiers, not under concurrency.</div></div>
+      <div class="req"><b class="n">2</b><div><b>Free the seats</b> of checkouts nobody pays for, so others can buy them.</div></div>
+      <div class="req"><b class="n">3</b><div><b>Admit each pass exactly once</b> at the gate.</div></div>
+    </div>
+    <div>
+      <div class="answer">We read how <b>Hi.Events</b> (open source, PHP/Laravel) handles this, listed where it is weak, and rebuilt the core in <b>TypeScript</b> so that each rule is <b>one atomic database step</b> that a test tries to race.</div>
+      <div class="chips">
+        <span class="chip">One process</span><span class="chip">One SQLite file</span><span class="chip">No external service</span><span class="chip">No API key</span><span class="chip">No AI in the product</span>
+      </div>
+      <p class="note" style="margin-top:22px;font-size:17px;color:#5b6675;line-height:1.4">Two improvements on top of the baseline:<br><b class="teal">Fix:</b> capacity enforced on tier <i>and</i> event pool, counting holds (GAP-1).<br><b class="teal">Differentiator:</b> a waiting room and a per-buyer cap.</p>
+    </div>
+  </div>
+  <div class="foot"><span>github.com/Yash13606/debugdevise</span><span>1 / 5</span></div>
+</section>
+
+<!-- 2. The original and where it is weak -->
+<section class="slide s2">
+  <p class="kicker">The original</p>
+  <h2>How Hi.Events handles a rush, and where it is weak</h2>
+  <p class="sub" style="margin-bottom:12px;font-size:17px">Commit <code>af22b01</code> · static read of the source, nothing executed · evidence from docs/OBSERVATIONS.md</p>
+  <table>
+    <thead><tr><th style="width:31%">What it does</th><th style="width:34%">Evidence (file:line)</th><th>Weak for a 6 PM rush</th></tr></thead>
+    <tbody>
+      <tr><td>One Postgres advisory lock per event wraps all order creation</td><td class="ev">CreateOrderHandler.php:61-62<br>TransactionLockService.php:21-27</td><td class="weak">All 5,000 creates queue behind one lock; no queue in front (GAP-2)</td></tr>
+      <tr><td>A hold is an order marked RESERVED; an expired hold is only filtered out when counting</td><td class="ev">OrderItemRepository.php:81-88<br>no expiry job: Console/Kernel.php:22-34</td><td class="weak">Rows stay RESERVED; nothing tells the waitlist a seat is free (GAP-5)</td></tr>
+      <tr><td>The locked check for a shared pool subtracts sales but not live holds</td><td class="ev">AvailableProductQuantitiesFetchService.php:75-83<br>CapacityAssignmentDomainObject.php:78-85</td><td class="weak">A pool shared by tiers can be oversold (GAP-1, from the code, not reproduced)</td></tr>
+      <tr><td>“Sold” is counted later, by an unguarded +N update when payment completes</td><td class="ev">ProductQuantityUpdateService.php:38-42, 99-106</td><td class="weak">Hold to sold is not one atomic step (GAP-8)</td></tr>
+      <tr><td>Admin check-in reads, then writes; the scanner path has a unique index</td><td class="ev">CheckInAttendeeHandler.php:78-123<br>…add_unique_attendee_check_in_index.php:22-26</td><td class="weak">Two paths, two sources of truth; one can admit twice (GAP-6)</td></tr>
+      <tr><td>An exhausted promo is dropped silently; limits are per order and per IP only</td><td class="ev">CreateOrderHandler.php:116-118<br>OrderCreateRequestValidationService.php:489<br>RouteServiceProvider.php:57-60</td><td class="weak">Full-price surprise (GAP-9); hoarding and campus NAT (GAP-3, GAP-4)</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Several findings (GAP-1, 2, 3, 4, 8) are reasoned from the cited lines and were not reproduced; the documents say which. Full list: docs/OBSERVATIONS.md and docs/GAPS.md.</p>
+  <div class="foot"><span>Hi.Events: github.com/HiEventsDev/Hi.Events</span><span>2 / 5</span></div>
+</section>
+
+<!-- 3. AtomicPass design -->
+<section class="slide s3">
+  <p class="kicker">The design</p>
+  <h2>Every rule is one conditional update that a test races</h2>
+  <p class="sub" style="margin-bottom:6px;font-size:17px">A <code>held</code> and a <code>sold</code> counter on every tier <b>and</b> on the event pool. The number of rows an UPDATE changes decides who won.</p>
+  <div class="flow">
+    <div class="card"><span class="tag">differentiator</span><h3>1 · Waiting room</h3>First come, first admitted; a few per tick. An admission is used up only by a hold that succeeds. <b>Per-buyer cap</b> on the normalised email.</div>
+    <div class="card"><span class="tag">the fix</span><h3>2 · Hold</h3>One <code>BEGIN IMMEDIATE</code>: tier, then pool.<pre>UPDATE tiers SET held=held+q
+ WHERE cap-sold-held &gt;= q;
+UPDATE events SET held=held+n
+ WHERE cap-sold-held &gt;= n;</pre>0 rows changed: refused, all rolled back.</div>
+    <div class="card"><h3>3 · Pay</h3><span class="arrow">held → sold</span> in the same statements, so held + sold never changes. Creates the order and one ticket per seat with a 128-bit QR token.</div>
+    <div class="card"><h3>4 · Expire</h3>Every reserve, pay and read frees due holds first; a sweeper only tidies up. <b>A seat never waits for the sweeper.</b></div>
+    <div class="card"><h3>5 · Gate</h3><pre>UPDATE tickets
+ SET status='CHECKED_IN'
+ WHERE qr_token=? AND
+       status='VALID';</pre>One scan wins. Refund uses the same guard, so a scan and a refund racing have one winner.</div>
+  </div>
+  <div class="nets">
+    <div class="net"><b>Database as the last line:</b> <code>CHECK (sold + held ≤ capacity)</code> on every tier and event.</div>
+    <div class="net"><b>An audit after every test:</b> counters are recomputed from the rows; any difference fails the test.</div>
+    <div class="net"><b>Honest ceiling:</b> SQLite has one writer, so one machine. The same statements are documented for PostgreSQL, not run.</div>
+  </div>
+  <div class="foot"><span>docs/ARCHITECTURE.md · docs/DATA_MODEL.md</span><span>3 / 5</span></div>
+</section>
+
+<!-- 4. Evidence -->
+<section class="slide s4">
+  <p class="kicker">Evidence</p>
+  <h2>Run, repeated, audited</h2>
+  <p class="sub" style="margin-bottom:0;font-size:17px">Real output from this repository on the development laptop (Windows 11, Node 24.13).</p>
+  <div class="cols">
+    <div class="term"><span class="dim">$ npm run killer -- --reporter=verbose</span>
+<span class="ok">✓</span> kt1                 two buyers ask for the last ticket at once: exactly one 201, th…
+<span class="ok">✓</span> kt3                 the first scan admits, the second is 409 ALREADY_CHECKED_IN wit…
+<span class="ok">✓</span> kt1-pool            tiers A and B (5 each) in a pool of 5: ten parallel holds, exac…
+<span class="ok">✓</span> buyer-cap-race      ten parallel requests of one seat from one buyer: exactly 4 suc…
+<span class="ok">✓</span> kt1-pool            a hold that spans both tiers is taken whole or not at all
+<span class="ok">✓</span> kt3                 twenty parallel scans of a new ticket: exactly one 200, ninetee…
+<span class="ok">✓</span> kt3                 each ticket of an order admits once, independently
+<span class="ok">✓</span> kt3-db              two worker threads scan the same QR at the same moment: exactly…
+<span class="ok">✓</span> queue-race          two connections use the same admission at the same moment: exac…
+<span class="ok">✓</span> kt1-db              two worker threads race for the last ticket: exactly one wins, …
+<span class="ok">✓</span> buyer-cap-race      two connections ask for 3 seats each for the same buyer at the …
+<span class="ok">✓</span> refund-scan-race    exactly one wins for every ticket, and the counters stay true
+<span class="ok">✓</span> kt1                 exactly 10 successes every run, and sold + held = 10
+<span class="ok">✓</span> kt2                 buyer 2 is refused, waits out the TTL, then gets the seat; payi…
+
+<span class="ok">Test Files  9 passed (9)</span>
+<span class="ok">Tests  14 passed (14)</span></div>
+    <div class="stats">
+      
+      <div class="stat"><b>20 / 20</b><span>runs of <code>npm run killer</code> in a row on the final code, all green</span></div>
+      <div class="stat"><b>163 tests</b><span>in 24 files; after each one an audit recomputes every counter from the rows and fails the test on any difference</span></div>
+      <div class="stat"><b>4,500 + 500</b><span><code>npm run rush</code>: 5,000 buyers, 4,500 seats: 4,500 holds, 500 sold out, nothing oversold, invariants clean (4.9 s, one run)</span></div>
+    </div>
+  </div>
+  <div class="teeth"><b>The tests can fail.</b> Each guard was removed once, the tests run, the edit reverted. A deferred transaction instead of <code>BEGIN IMMEDIATE</code> made KT1-db and the per-buyer cap race fail (“database is locked”); dropping the pool guard failed KT1-pool; dropping the <code>VALID</code> guard failed every KT3 test, over HTTP and across two connections.</div>
+  <div class="foot"><span>npm run killer · npm test · npm run rush</span><span>4 / 5</span></div>
+</section>
+
+<!-- 5. Demo and run -->
+<section class="slide s5">
+  <p class="kicker">Demo and run</p>
+  <h2>Five commands, then the live demo</h2>
+  <div class="cols">
+    <div>
+<div class="cmd"><span class="c"># Node.js 22.12 or newer</span>
+git clone https://github.com/Yash13606/debugdevise
+cd debugdevise
+npm install
+npm run killer
+npm start</div>
+      <div class="env"><b>Short hold lifetime for the demo.</b> Put this in <code>.env</code> (copy of <code>.env.example</code>):<br><code>HOLD_TTL_SECONDS=2</code><br>Every setting has a default, so without <code>.env</code> a hold lasts 600 s.</div>
+    </div>
+    <div>
+      <ol class="demo">
+        <li><b>Show <code>.env</code></b> with <code>HOLD_TTL_SECONDS=2</code>.</li>
+        <li><b><code>npm run killer</code></b><span>last-ticket race, pool race, an unpaid hold frees its seat, one scan per ticket, and the races across connections</span></li>
+        <li><b><code>npm run demo</code></b><span>ten buyers join the line, three admitted per tick, an unadmitted buyer gets <code>403 NOT_ADMITTED</code>, the cap refuses extra tickets with <code>409 BUYER_LIMIT</code></span></li>
+        <li><b>Open the matching section of <code>docs/</code></b> for each point.</li>
+        <li><b>Optional: <code>npm run rush</code></b><span>5,000 buyers press buy at once for 4,500 seats</span></li>
+      </ol>
+    </div>
+  </div>
+  <div class="foot"><span>README.md · SUBMISSION.md · docs/</span><span>5 / 5</span></div>
+</section>
+
+</body>
+</html>
