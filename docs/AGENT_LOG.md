@@ -111,9 +111,17 @@ A second chat built the rebuild from these documents. This section records it.
 | 3 | Adding the per-buyer cap broke three older tests that bought 20 to 40 tickets for one buyer | The full run; those tests now use several buyers or switch the cap off |
 | 4 | Expected a deferred transaction to break the check-in race; it did not, because the first statement there is already a write | Run as an experiment; the check-in tests were then tested by removing the conditional guard instead |
 | 5 | A sale-window test ignored that the default 10-minute hold lifetime expires holds during a two-hour clock jump | The test failed; it now uses a one-day lifetime |
+| 6 | The committed lockfile still carried the name and licence from `npm init`, because `package.json` was rewritten after the first install | A fresh clone followed by `npm install` showed a modified lockfile; it was refreshed and pushed |
+| 7 | A throwaway check wrote a POSIX-style database path into a `.env`, which Node on Windows resolved onto another folder of the drive | Found by listing the folder afterwards; the stray test files were deleted and nothing from it was committed |
+| 8 | A repeat of the 20-run stability check on the final code stopped at the 11th run | All nine test files timed out together after about 33 minutes with no assertion failing, which fits the laptop being suspended rather than a product fault (an inference from those logs); the check was started again |
 
 ### Evidence that the tests can fail
 Each of these was done by a temporary edit, run and reverted; none was committed. A deferred transaction instead of `BEGIN IMMEDIATE` made KT1-db and the per-buyer cap race fail with "database is locked". Removing the pool guard made KT1-pool fail. Removing the `VALID` guard from check-in made every KT3 test fail, over HTTP and across connections. Loosening the promo limit made five promo tests fail.
+
+### Checks on the final code
+- A fresh clone from GitHub: `npm install`, `npm run build`, `npm test` (163 tests in 24 files), `npm run killer` (14 tests in 9 files) and `npm start` on the defaults all worked.
+- `npm run killer` passed 20 runs in a row at step 4.5 (10 killer tests then). It was repeated on the final code; see mistake 8 for the interrupted repeat. The outcome of the restarted check is stated in the README, which is not frozen with these documents.
+- `npm run rush`: 5,000 buyers for 4,500 seats gave 4,500 holds, 500 sold-out answers, no other answer and clean invariants, in 5.7 s in one run on the development laptop.
 
 ### Limits of the build
 - HTTP-level "parallel" requests run one at a time inside one process; only the worker-thread tests create real contention between connections.
